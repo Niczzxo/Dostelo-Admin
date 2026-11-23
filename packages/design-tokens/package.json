@@ -1,0 +1,1 @@
+{"devDependencies":{"typescript":"^5.7.0"},"exports":{".":"./tokens.ts","./tokens.css":"./tokens.css"},"main":"tokens.ts","name":"@dostelo/design-tokens","private":true,"scripts":{"typecheck":"tsc --noEmit -p tsconfig.json"},"type":"module","types":"tokens.ts","version":"0.1.0"}
