@@ -1,0 +1,1 @@
+{"devDependencies":{"turbo":"^2.3.0","typescript":"^5.7.0"},"name":"dostelo","packageManager":"pnpm@12.21.0","pnpm":{"onlyBuiltDependencies":["@prisma/engines","prisma","@nestjs/core","esbuild"]},"private":true,"scripts":{"build":"turbo run build","dev":"turbo run dev","lint":"turbo run lint","test":"turbo run test","typecheck":"turbo run typecheck"},"version":"0.1.0"}
