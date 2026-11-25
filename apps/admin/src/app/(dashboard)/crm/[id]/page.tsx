@@ -20,11 +20,22 @@ import { expireSession } from '../../../../lib/session';
 import { useAuth } from '../../../../components/auth-provider';
 import {
   Badge,
+  CardHead,
   EmptyNote,
   ErrorNote,
+  KpiCard,
   LoadingNote,
-  PageHeader,
+  ModuleHeader,
 } from '../../../../components/ui';
+import {
+  MapPin,
+  NotebookPen,
+  ShoppingBag,
+  Tags,
+  UserRound,
+  Users,
+  Wallet,
+} from 'lucide-react';
 
 /**
  * The CRM timeline (Phase 5): the customer's orders, the visitor
@@ -225,9 +236,15 @@ export default function CustomerProfilePage() {
 
   return (
     <section>
-      <PageHeader title={customer ? customer.fullName : 'Customer'}>
-        <Link href="/crm">Back to customers</Link>
-      </PageHeader>
+      <ModuleHeader
+        icon={Users}
+        title={customer ? customer.fullName : 'Customer'}
+        description="Customer profile, addresses, visitor activity linked through authenticated or consented flows, staff notes, tags and orders."
+      >
+        <Link className="btn btn-secondary" href="/crm">
+          Back to customers
+        </Link>
+      </ModuleHeader>
 
       {profile.loading ? <LoadingNote label="Loading profile..." /> : null}
       {profile.error ? (
@@ -236,9 +253,39 @@ export default function CustomerProfilePage() {
 
       {customer ? (
         <>
+          <div className="kpi-grid">
+            <KpiCard
+              icon={ShoppingBag}
+              label="Orders"
+              value={customer.orderCount.toLocaleString('en-US')}
+              note="Orders placed by this customer"
+              tone="blue"
+            />
+            <KpiCard
+              icon={Wallet}
+              label="Lifetime Value"
+              value={formatMinor(customer.lifetimeValueMinor)}
+              note="Total value of this customer's orders"
+              tone="green"
+            />
+            <KpiCard
+              icon={MapPin}
+              label="Saved Addresses"
+              value={customer.addresses.length.toLocaleString('en-US')}
+              note="Addresses saved on this profile"
+              tone="purple"
+            />
+            <KpiCard
+              icon={Tags}
+              label="Tags"
+              value={customer.tags.length.toLocaleString('en-US')}
+              note="Tags on this customer"
+              tone="orange"
+            />
+          </div>
           <div className="detail-grid">
             <div className="card">
-              <h2 style={{ fontSize: 16, marginTop: 0 }}>Profile</h2>
+              <CardHead icon={UserRound} title="Profile" />
               <dl className="kv">
                 <dt>Name</dt>
                 <dd>{customer.fullName}</dd>
@@ -271,7 +318,7 @@ export default function CustomerProfilePage() {
               </dl>
             </div>
             <div className="card">
-              <h2 style={{ fontSize: 16, marginTop: 0 }}>Addresses</h2>
+              <CardHead icon={MapPin} title="Addresses" />
               {customer.addresses.length === 0 ? (
                 <EmptyNote>No saved addresses.</EmptyNote>
               ) : (
@@ -313,9 +360,7 @@ export default function CustomerProfilePage() {
             <>
               <div className="detail-grid">
                 <div className="card">
-                  <h2 style={{ fontSize: 16, marginTop: 0 }}>
-                    Visitor activity
-                  </h2>
+                  <CardHead icon={UserRound} title="Visitor activity" />
                   <dl className="kv">
                     <dt>Linked sessions</dt>
                     <dd>{timeline.data.visitor.sessionCount}</dd>
@@ -360,7 +405,7 @@ export default function CustomerProfilePage() {
                   ) : null}
                 </div>
                 <div className="card">
-                  <h2 style={{ fontSize: 16, marginTop: 0 }}>Tags</h2>
+                  <CardHead icon={Tags} title="Tags" />
                   <TagManager
                     customerId={customerId}
                     tags={timeline.data.tags}
@@ -374,7 +419,7 @@ export default function CustomerProfilePage() {
               </div>
 
               <div className="card section-gap">
-                <h2 style={{ fontSize: 16, marginTop: 0 }}>Notes</h2>
+                <CardHead icon={NotebookPen} title="Notes" />
                 {timeline.data.notes.length === 0 ? (
                   <EmptyNote>No staff notes yet.</EmptyNote>
                 ) : (
@@ -416,8 +461,10 @@ export default function CustomerProfilePage() {
             <EmptyNote>This customer has not ordered yet.</EmptyNote>
           ) : null}
           {orders.data && orders.data.items.length > 0 ? (
+            <div className="card">
+            <CardHead icon={ShoppingBag} title="Customer orders" />
             <div className="table-wrap">
-              <table className="data">
+              <table>
                 <thead>
                   <tr>
                     <th>Order</th>
@@ -445,6 +492,7 @@ export default function CustomerProfilePage() {
                   ))}
                 </tbody>
               </table>
+            </div>
             </div>
           ) : null}
         </>

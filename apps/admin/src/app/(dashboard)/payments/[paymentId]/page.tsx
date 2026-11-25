@@ -4,6 +4,16 @@ import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
+  ArrowLeft,
+  CreditCard,
+  History,
+  Landmark,
+  ReceiptText,
+  ShieldCheck,
+  Undo2,
+  User,
+} from 'lucide-react';
+import {
   PAYMENT_GATEWAY_LABELS,
   type Payment,
   type Refund,
@@ -14,10 +24,11 @@ import { expireSession } from '../../../../lib/session';
 import { useAuth } from '../../../../components/auth-provider';
 import {
   Badge,
+  CardHead,
   EmptyNote,
   ErrorNote,
   LoadingNote,
-  PageHeader,
+  ModuleHeader,
 } from '../../../../components/ui';
 
 function handleActionError(caught: unknown): string {
@@ -27,6 +38,34 @@ function handleActionError(caught: unknown): string {
     return 'Your session has expired.';
   }
   return uiError.message;
+}
+
+const SENSITIVE_KEY = /token|secret|password|signature/i;
+
+/** Renders an event payload as key and value rows, with any field
+ * whose name suggests a secret replaced by the word hidden. Secret
+ * values are never shown in the portal. */
+function PayloadRows({ payload }: { payload: Record<string, unknown> }) {
+  const entries = Object.entries(payload);
+  if (entries.length === 0) return <EmptyNote>Empty payload.</EmptyNote>;
+  return (
+    <dl className="kv">
+      {entries.map(([key, value]) => (
+        <div key={key} style={{ display: 'contents' }}>
+          <dt>{key}</dt>
+          <dd>
+            {SENSITIVE_KEY.test(key)
+              ? 'hidden'
+              : value === null || value === undefined
+                ? '-'
+                : typeof value === 'object'
+                  ? JSON.stringify(value)
+                  : String(value)}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 function VerifyCard({
@@ -64,12 +103,12 @@ function VerifyCard({
 
   return (
     <div className="card">
-      <h2 style={{ fontSize: 16, marginTop: 0 }}>Verify manual payment</h2>
+      <CardHead icon={ShieldCheck} title="Verify Manual Payment" />
       <p style={{ fontSize: 14, lineHeight: 1.6 }}>
         The customer reports sending {formatMoney(payment.amount)} from{' '}
         {payment.senderNumber ?? 'an unknown number'} with transaction id{' '}
-        {payment.customerTxnId ?? 'not reported'}. Verify only after the
-        money is visible in the store account.
+        {payment.customerTxnId ?? 'not reported'}. Verify only after the money
+        is visible in the store account.
       </p>
       <label className="field">
         Note (optional)
@@ -176,7 +215,7 @@ function RefundCard({
 
   return (
     <div className="card">
-      <h2 style={{ fontSize: 16, marginTop: 0 }}>Refunds</h2>
+      <CardHead icon={Undo2} title="Refund History" />
       {refunds.length === 0 ? (
         <EmptyNote>No refunds recorded against this payment.</EmptyNote>
       ) : (
@@ -187,9 +226,16 @@ function RefundCard({
                 <Badge>{refund.status}</Badge>{' '}
                 <strong>{formatMoney(refund.amount)}</strong>
               </div>
-              {refund.reason ? <div>{refund.reason}</div> : null}
-              {refund.gatewayNote ? <div>{refund.gatewayNote}</div> : null}
-              <div className="when">{formatDateTime(refund.createdAt)}</div>
+              {refund.reason ? <div>Reason: {refund.reason}</div> : null}
+              {refund.gatewayNote ? (
+                <div>Gateway: {refund.gatewayNote}</div>
+              ) : null}
+              <div className="when">
+                Recorded {formatDateTime(refund.createdAt)}
+                {refund.updatedAt !== refund.createdAt
+                  ? `, updated ${formatDateTime(refund.updatedAt)}`
+                  : ''}
+              </div>
               {canRefund && refund.status === 'manual-pending' ? (
                 <button
                   type="button"
@@ -209,6 +255,7 @@ function RefundCard({
       )}
       {canRefund && refundable ? (
         <form onSubmit={handleRequest} style={{ marginTop: 16 }}>
+          <h3 style={{ fontSize: 15, marginTop: 0 }}>Request a refund</h3>
           <label className="field">
             Amount in taka (empty means full remaining)
             <input
@@ -244,8 +291,8 @@ function RefundCard({
       ) : null}
       {!canRefund ? (
         <p className="note muted">
-          Your role cannot manage refunds (the payments.refund permission
-          is required).
+          Your role cannot manage refunds (the payments.refund permission is
+          required).
         </p>
       ) : null}
       {error ? (
@@ -264,15 +311,43 @@ export default function PaymentDetailPage() {
   const permissions = session.principal?.permissions ?? [];
   const canVerify = permissions.includes('payments.verify');
   const canRefund = permissions.includes('payments.refund');
+  const canReadOrders = permissions.includes('orders.read');
 
   const detail = useData((client) => client.getPayment(paymentId), [paymentId]);
   const payment = detail.data?.payment;
+  const orders = useData(
+    (client) =>
+      canReadOrders && payment
+        ? client.listStaffOrders()
+        : Promise.resolve(null),
+    [canReadOrders, payment?.id],
+  );
+  const order = (orders.data?.items ?? []).find(
+    (item) => item.id === payment?.orderId,
+  );
+
+  const events = detail.data?.events ?? [];
+  const latestPayloadEvent = [...events]
+    .reverse()
+    .find((event) => event.payload && Object.keys(event.payload).length > 0);
+  const confirmed =
+    payment?.status === 'successful' || payment?.status === 'collected';
 
   return (
     <section>
-      <PageHeader title="Payment detail">
-        <Link href="/payments">Back to payments</Link>
-      </PageHeader>
+      <ModuleHeader
+        icon={CreditCard}
+        title="Payment Detail"
+        description={
+          payment
+            ? `${PAYMENT_GATEWAY_LABELS[payment.gateway]} payment, ${payment.channel} channel, status ${payment.status}.`
+            : 'One payment attempt with its verification, events and refunds.'
+        }
+      >
+        <Link className="btn btn-secondary" href="/payments">
+          <ArrowLeft size={15} /> Back to payments
+        </Link>
+      </ModuleHeader>
 
       {detail.loading ? <LoadingNote label="Loading payment..." /> : null}
       {detail.error ? (
@@ -283,79 +358,190 @@ export default function PaymentDetailPage() {
         <>
           <div className="detail-grid">
             <div className="card">
-              <h2 style={{ fontSize: 16, marginTop: 0 }}>Payment</h2>
+              <CardHead icon={ReceiptText} title="Transaction and Order" />
               <dl className="kv">
-                <dt>Gateway</dt>
-                <dd>{PAYMENT_GATEWAY_LABELS[payment.gateway]}</dd>
-                <dt>Channel</dt>
-                <dd>{payment.channel}</dd>
+                <dt>Payment ID</dt>
+                <dd>{payment.id}</dd>
+                <dt>Transaction ID</dt>
+                <dd>
+                  {payment.providerTxnId ?? payment.customerTxnId ?? '-'}
+                </dd>
                 <dt>Status</dt>
                 <dd>
                   <Badge>{payment.status}</Badge>
                 </dd>
-                <dt>Amount</dt>
-                <dd>
-                  <strong>{formatMoney(payment.amount)}</strong>
-                </dd>
                 <dt>Order</dt>
-                <dd>{payment.orderId}</dd>
-                <dt>Provider txn</dt>
-                <dd>{payment.providerTxnId ?? '-'}</dd>
+                <dd>
+                  {order ? (
+                    <Link href={`/orders/${order.orderNumber}`}>
+                      {order.orderNumber}
+                    </Link>
+                  ) : (
+                    payment.orderId
+                  )}
+                </dd>
                 <dt>Created</dt>
                 <dd>{formatDateTime(payment.createdAt)}</dd>
                 <dt>Updated</dt>
                 <dd>{formatDateTime(payment.updatedAt)}</dd>
               </dl>
             </div>
+
             <div className="card">
-              <h2 style={{ fontSize: 16, marginTop: 0 }}>Events</h2>
-              {detail.data && detail.data.events.length === 0 ? (
-                <EmptyNote>No events recorded.</EmptyNote>
+              <CardHead icon={Landmark} title="Amounts and Gateway" />
+              <dl className="kv">
+                <dt>Requested amount</dt>
+                <dd>
+                  <strong>{formatMoney(payment.amount)}</strong>
+                </dd>
+                <dt>Confirmed amount</dt>
+                <dd>
+                  {confirmed
+                    ? formatMoney(payment.amount)
+                    : 'Not confirmed yet'}
+                </dd>
+                <dt>Gateway</dt>
+                <dd>{PAYMENT_GATEWAY_LABELS[payment.gateway]}</dd>
+                <dt>Channel</dt>
+                <dd>{payment.channel}</dd>
+                <dt>Gateway reference</dt>
+                <dd>{payment.providerTxnId ?? '-'}</dd>
+                {payment.instructions ? (
+                  <>
+                    <dt>Instructions sent</dt>
+                    <dd>
+                      {payment.instructions.text} (reference{' '}
+                      {payment.instructions.reference})
+                    </dd>
+                  </>
+                ) : null}
+              </dl>
+            </div>
+
+            <div className="card">
+              <CardHead icon={User} title="Customer" />
+              {order ? (
+                <dl className="kv">
+                  <dt>Name</dt>
+                  <dd>{order.address.fullName}</dd>
+                  <dt>Phone</dt>
+                  <dd>{order.address.phone}</dd>
+                  <dt>Area</dt>
+                  <dd>
+                    {order.address.area
+                      ? `${order.address.area}, ${order.address.city}`
+                      : order.address.city}
+                  </dd>
+                </dl>
+              ) : (
+                <EmptyNote>
+                  {canReadOrders
+                    ? 'The linked order could not be loaded, so customer details are unavailable here.'
+                    : 'Customer details come from the linked order and need the orders.read permission.'}
+                </EmptyNote>
+              )}
+              {payment.channel === 'manual' ? (
+                <dl className="kv" style={{ marginTop: 12 }}>
+                  <dt>Sender number</dt>
+                  <dd>{payment.senderNumber ?? '-'}</dd>
+                  <dt>Customer txn id</dt>
+                  <dd>{payment.customerTxnId ?? '-'}</dd>
+                </dl>
               ) : null}
-              <ul className="timeline">
-                {(detail.data?.events ?? []).map((event) => (
-                  <li key={event.id}>
-                    <div>
-                      <strong>{event.type}</strong>
-                      {event.status ? (
-                        <>
-                          {' '}
-                          <Badge>{event.status}</Badge>
-                        </>
-                      ) : null}
-                    </div>
-                    <div className="when">
-                      {formatDateTime(event.createdAt)}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+            </div>
+
+            <div className="card">
+              <CardHead icon={History} title="Gateway Response Summary" />
+              {latestPayloadEvent?.payload ? (
+                <>
+                  <p className="note muted" style={{ marginTop: 0 }}>
+                    From the latest event with a payload ({latestPayloadEvent.type},{' '}
+                    {formatDateTime(latestPayloadEvent.createdAt)}). Fields whose
+                    names suggest a secret are hidden.
+                  </p>
+                  <PayloadRows payload={latestPayloadEvent.payload} />
+                </>
+              ) : (
+                <EmptyNote>
+                  No gateway or event payload was recorded for this payment.
+                </EmptyNote>
+              )}
             </div>
           </div>
 
           <div className="detail-grid section-gap">
-            {payment.status === 'verification-pending' &&
-            payment.channel === 'manual' ? (
-              canVerify ? (
-                <VerifyCard payment={payment} onDone={detail.reload} />
+            <div className="card">
+              <CardHead icon={History} title="Payment Timeline" />
+              {events.length === 0 ? (
+                <EmptyNote>No events recorded.</EmptyNote>
               ) : (
-                <div className="card">
-                  <h2 style={{ fontSize: 16, marginTop: 0 }}>
-                    Verify manual payment
-                  </h2>
-                  <p className="note muted">
-                    Your role cannot verify payments (the payments.verify
-                    permission is required).
-                  </p>
-                </div>
-              )
-            ) : null}
-            <RefundCard
-              payment={payment}
-              refunds={detail.data?.refunds ?? []}
-              canRefund={canRefund}
-              onDone={detail.reload}
-            />
+                <ul className="timeline">
+                  {events.map((event) => (
+                    <li key={event.id}>
+                      <div>
+                        <strong>{event.type}</strong>
+                        {event.status ? (
+                          <>
+                            {' '}
+                            <Badge>{event.status}</Badge>
+                          </>
+                        ) : null}
+                      </div>
+                      {event.payload ? (
+                        <div className="muted" style={{ fontSize: 13 }}>
+                          {Object.entries(event.payload)
+                            .filter(([key]) => !SENSITIVE_KEY.test(key))
+                            .slice(0, 4)
+                            .map(
+                              ([key, value]) =>
+                                `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`,
+                            )
+                            .join(', ')}
+                          {Object.keys(event.payload).some((key) =>
+                            SENSITIVE_KEY.test(key),
+                          )
+                            ? ' (sensitive fields hidden)'
+                            : ''}
+                        </div>
+                      ) : null}
+                      <div className="when">
+                        {formatDateTime(event.createdAt)}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="note muted">
+                Audit note: every state change on this payment writes exactly
+                one event above. Manual payments are only marked paid through
+                the staff verification action, and refunds are only confirmed
+                once the money is handed back, so this timeline is the audit
+                trail for the money.
+              </p>
+            </div>
+
+            <div>
+              {payment.status === 'verification-pending' &&
+              payment.channel === 'manual' ? (
+                canVerify ? (
+                  <VerifyCard payment={payment} onDone={detail.reload} />
+                ) : (
+                  <div className="card" style={{ marginBottom: 20 }}>
+                    <CardHead icon={ShieldCheck} title="Verify Manual Payment" />
+                    <p className="note muted">
+                      Your role cannot verify payments (the payments.verify
+                      permission is required).
+                    </p>
+                  </div>
+                )
+              ) : null}
+              <RefundCard
+                payment={payment}
+                refunds={detail.data?.refunds ?? []}
+                canRefund={canRefund}
+                onDone={detail.reload}
+              />
+            </div>
           </div>
         </>
       ) : null}

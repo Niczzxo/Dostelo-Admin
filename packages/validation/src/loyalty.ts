@@ -26,3 +26,22 @@ export const loyaltyRulesSchema = z
   })
   .strict();
 export type LoyaltyRulesUpdate = z.infer<typeof loyaltyRulesSchema>;
+
+export const pointsRuleSchema = z
+  .object({
+    id: z.string().trim().min(1).max(80).optional(),
+    activity: z.enum([
+      'completed-order',
+      'registration',
+      'verified-review',
+      'referral-purchase',
+    ]),
+    calculation: z.enum(['per-amount', 'fixed', 'one-time']),
+    points: z.number().int().min(0).max(100000),
+    perAmountTaka: z.number().int().positive().max(1000000).nullable().optional(),
+    minOrderMinor: z.number().int().min(0).nullable().optional(),
+    maxPointsPerOrder: z.number().int().positive().nullable().optional(),
+    active: z.boolean(),
+  })
+  .strict();
+export type PointsRuleUpsert = z.infer<typeof pointsRuleSchema>;

@@ -18,17 +18,31 @@ import type {
   Customer,
   CustomerNote,
   DataExportRecord,
+  BackupSummary,
   DataExportResult,
   FollowUpTask,
   IdentityStatus,
   IntegrationStatus,
+  IntegrationTestResult,
   Lead,
   LeadContactAttempt,
   LeadStatus,
   LegalDocument,
+  LegalDocumentVersion,
+  LegalSyncStatus,
+  MaintenanceResult,
+  PublicLegalDocument,
+  StoredBackup,
   LoyaltyBalance,
   LoyaltyRules,
   LoyaltyTransaction,
+  AutomationExecution,
+  CampaignSegment,
+  CampaignStats,
+  MessageTemplate,
+  NotificationPreference,
+  PointsRule,
+  ReturnEvent,
   Order,
   OrderStatus,
   Payment,
@@ -81,8 +95,23 @@ import type {
   LoyaltyAdjust,
   LoyaltyRulesUpdate,
   ManualCallLog,
+  MessageTemplateUpsert,
   MfaExchange,
   NotificationMarkRead,
+  NotificationPreferencesUpdate,
+  AcceptInvite,
+  InviteStaff,
+  PointsRuleUpsert,
+  ProductCreate,
+  ProductUpdate,
+  ReturnAssign,
+  ReturnInspectionInput,
+  ReturnNote,
+  ReturnPickup,
+  ReviewReplyCreate,
+  ReviewRequestCreate,
+  StaffProfileUpdate,
+  StaffSend,
   OrderStatusTransition,
   PaymentVerify,
   RecoverySettingsUpdate,
@@ -248,6 +277,57 @@ export interface NotificationFeedView {
 export interface ReturnRefundHandOffView {
   request: ReturnRequest;
   refundId: string | null;
+}
+
+export interface MessageTemplateView extends MessageTemplate {
+  source: 'built-in' | 'stored';
+  updatedAt: string | null;
+}
+
+export interface StockMovementView {
+  id: string;
+  variantId: string;
+  productId: string;
+  type: 'adjustment' | 'reserve' | 'release' | 'finalize';
+  deltaOnHand: number;
+  deltaReserved: number;
+  onHandAfter: number;
+  reservedAfter: number;
+  reference: string | null;
+  createdAt: string;
+}
+
+export interface OwnSessionView {
+  familyId: string;
+  createdAt: string;
+  lastActiveAt: string;
+  expiresAt: string;
+  active: boolean;
+}
+
+export interface SecuritySettingsView {
+  corsAllowlist: string[];
+  corsCredentials: boolean;
+  securityHeaders: string[];
+  bodyLimit: string;
+  loginRateLimitPerMinute: number;
+  accessTokenTtlSeconds: number;
+  refreshTokenTtlDays: number;
+  passwordMinLength: number;
+  mfaChallengeTtlMinutes: number;
+  requireMfaForAdmins: boolean;
+  accountLockout: boolean;
+  loginNotifications: string;
+}
+
+export interface ReturnDetailView {
+  request: ReturnRequest;
+  events: ReturnEvent[];
+}
+
+export interface CampaignSegmentSize {
+  key: CampaignSegment;
+  size: number;
 }
 
 export interface ApiClientOptions {
@@ -1103,6 +1183,406 @@ export function createApiClient(options: ApiClientOptions) {
     // of the automations that actually run, with live settings.
     listAutomations(): Promise<{ items: AutomationInfo[] }> {
       return request('GET', '/v1/admin/automation');
+    },
+    listAutomationExecutions(filter?: {
+      workflowKey?: string;
+      status?: 'success' | 'failed';
+      search?: string;
+    }): Promise<{ items: AutomationExecution[] }> {
+      const params = new URLSearchParams();
+      if (filter?.workflowKey) params.set('workflowKey', filter.workflowKey);
+      if (filter?.status) params.set('status', filter.status);
+      if (filter?.search) params.set('search', filter.search);
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return request('GET', `/v1/admin/automation/executions${suffix}`);
+    },
+    setAutomationEnabled(
+      key: string,
+      enabled: boolean,
+    ): Promise<AutomationInfo> {
+      return request(
+        'POST',
+        `/v1/admin/automation/${encodeURIComponent(key)}/${enabled ? 'activate' : 'pause'}`,
+      );
+    },
+
+    // Message templates (staff; communications.read to view,
+    // recovery.edit to change). One shared store for recovery,
+    // staff sends, marketing and support canned replies.
+    listMessageTemplates(): Promise<{ items: MessageTemplateView[] }> {
+      return request('GET', '/v1/communications/templates');
+    },
+    upsertMessageTemplate(
+      key: string,
+      dto: MessageTemplateUpsert,
+    ): Promise<MessageTemplateView> {
+      return request(
+        'PUT',
+        `/v1/communications/templates/${encodeURIComponent(key)}`,
+        dto,
+      );
+    },
+    deleteMessageTemplate(
+      key: string,
+    ): Promise<{ key: string; removed: boolean; builtinRestored: boolean }> {
+      return request(
+        'DELETE',
+        `/v1/communications/templates/${encodeURIComponent(key)}`,
+      );
+    },
+    sendMessage(dto: StaffSend): Promise<CommunicationLog> {
+      return request('POST', '/v1/communications/send', dto);
+    },
+
+    // Staff order creation (staff; orders.create). Totals are
+    // computed by the server through the checkout path.
+    createStaffOrder(dto: CheckoutRequest): Promise<Order> {
+      return request('POST', '/v1/admin/orders', dto);
+    },
+
+    // Products admin (staff; products.*). All statuses, unlike
+    // the public catalogue read.
+    listAdminProducts(): Promise<{ items: Product[]; total: number }> {
+      return request('GET', '/v1/admin/products');
+    },
+    getAdminProduct(id: string): Promise<Product> {
+      return request('GET', `/v1/admin/products/${encodeURIComponent(id)}`);
+    },
+    createProduct(dto: ProductCreate): Promise<Product> {
+      return request('POST', '/v1/admin/products', dto);
+    },
+    updateProduct(id: string, dto: ProductUpdate): Promise<Product> {
+      return request(
+        'PUT',
+        `/v1/admin/products/${encodeURIComponent(id)}`,
+        dto,
+      );
+    },
+    deleteProduct(id: string): Promise<{ deleted: boolean }> {
+      return request(
+        'DELETE',
+        `/v1/admin/products/${encodeURIComponent(id)}`,
+      );
+    },
+
+    // Inventory movement ledger (staff; inventory.read).
+    listStockMovements(filter?: {
+      variantId?: string;
+      productId?: string;
+      from?: string;
+      to?: string;
+      limit?: number;
+    }): Promise<{ items: StockMovementView[] }> {
+      const params = new URLSearchParams();
+      if (filter?.variantId) params.set('variantId', filter.variantId);
+      if (filter?.productId) params.set('productId', filter.productId);
+      if (filter?.from) params.set('from', filter.from);
+      if (filter?.to) params.set('to', filter.to);
+      if (filter?.limit) params.set('limit', String(filter.limit));
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return request('GET', `/v1/inventory/movements${suffix}`);
+    },
+
+    // Returns workflow (staff; orders.edit, refunded needs
+    // payments.refund).
+    getReturnDetail(id: string): Promise<ReturnDetailView> {
+      return request(
+        'GET',
+        `/v1/admin/returns/${encodeURIComponent(id)}/detail`,
+      );
+    },
+    startReturnReview(id: string): Promise<ReturnRequest> {
+      return request(
+        'POST',
+        `/v1/admin/returns/${encodeURIComponent(id)}/review`,
+      );
+    },
+    requestReturnInfo(
+      id: string,
+      dto: ReturnNote,
+    ): Promise<ReturnRequest> {
+      return request(
+        'POST',
+        `/v1/admin/returns/${encodeURIComponent(id)}/request-info`,
+        dto,
+      );
+    },
+    assignReturnInspector(
+      id: string,
+      dto: ReturnAssign,
+    ): Promise<ReturnRequest> {
+      return request(
+        'POST',
+        `/v1/admin/returns/${encodeURIComponent(id)}/assign`,
+        dto,
+      );
+    },
+    scheduleReturnPickup(
+      id: string,
+      dto: ReturnPickup,
+    ): Promise<ReturnRequest> {
+      return request(
+        'POST',
+        `/v1/admin/returns/${encodeURIComponent(id)}/schedule-pickup`,
+        dto,
+      );
+    },
+    markReturnInTransit(id: string): Promise<ReturnRequest> {
+      return request(
+        'POST',
+        `/v1/admin/returns/${encodeURIComponent(id)}/in-transit`,
+      );
+    },
+    recordReturnReceived(id: string): Promise<ReturnRequest> {
+      return request(
+        'POST',
+        `/v1/admin/returns/${encodeURIComponent(id)}/received`,
+      );
+    },
+    startReturnInspection(id: string): Promise<ReturnRequest> {
+      return request(
+        'POST',
+        `/v1/admin/returns/${encodeURIComponent(id)}/inspection/start`,
+      );
+    },
+    completeReturnInspection(
+      id: string,
+      dto: ReturnInspectionInput,
+    ): Promise<ReturnRequest> {
+      return request(
+        'POST',
+        `/v1/admin/returns/${encodeURIComponent(id)}/inspection/complete`,
+        dto,
+      );
+    },
+    markReturnRefunded(id: string): Promise<ReturnRequest> {
+      return request(
+        'POST',
+        `/v1/admin/returns/${encodeURIComponent(id)}/refunded`,
+      );
+    },
+
+    // Campaigns: segments, send, stats (staff; marketing.*).
+    listCampaignSegments(
+      channel: string,
+    ): Promise<{ items: CampaignSegmentSize[] }> {
+      return request(
+        'GET',
+        `/v1/admin/campaigns/segments?channel=${encodeURIComponent(channel)}`,
+      );
+    },
+    sendCampaign(id: string): Promise<CampaignView> {
+      return request(
+        'POST',
+        `/v1/admin/campaigns/${encodeURIComponent(id)}/send`,
+      );
+    },
+    getCampaignStats(id: string): Promise<CampaignStats> {
+      return request(
+        'GET',
+        `/v1/admin/campaigns/${encodeURIComponent(id)}/stats`,
+      );
+    },
+
+    // Notifications: unread, hide, preferences.
+    markNotificationsUnread(
+      dto: NotificationMarkRead,
+    ): Promise<{ marked: number }> {
+      return request('POST', '/v1/admin/notifications/unread', dto);
+    },
+    hideNotifications(
+      dto: NotificationMarkRead,
+    ): Promise<{ marked: number }> {
+      return request('POST', '/v1/admin/notifications/hide', dto);
+    },
+    getNotificationPreferences(): Promise<NotificationPreference> {
+      return request('GET', '/v1/admin/notifications/preferences');
+    },
+    updateNotificationPreferences(
+      dto: NotificationPreferencesUpdate,
+    ): Promise<NotificationPreference> {
+      return request('PUT', '/v1/admin/notifications/preferences', dto);
+    },
+
+    // Loyalty: points rules and the full ledger.
+    listPointRules(): Promise<{ items: PointsRule[] }> {
+      return request('GET', '/v1/admin/loyalty/point-rules');
+    },
+    upsertPointRule(
+      dto: PointsRuleUpsert,
+    ): Promise<{ items: PointsRule[] }> {
+      return request('POST', '/v1/admin/loyalty/point-rules', dto);
+    },
+    listAllLoyaltyTransactions(): Promise<{ items: LoyaltyTransaction[] }> {
+      return request('GET', '/v1/admin/loyalty/transactions');
+    },
+
+    // Staff: invite flow and profile edits.
+    inviteStaff(
+      dto: InviteStaff,
+    ): Promise<{
+      admin: StaffMemberView;
+      inviteToken: string;
+      expiresAt: string;
+    }> {
+      return request('POST', '/v1/admin/staff/invite', dto);
+    },
+    updateStaffProfile(
+      id: string,
+      dto: StaffProfileUpdate,
+    ): Promise<StaffMemberView> {
+      return request(
+        'PATCH',
+        `/v1/admin/staff/${encodeURIComponent(id)}`,
+        dto,
+      );
+    },
+    acceptStaffInvite(dto: AcceptInvite): Promise<StaffMemberView> {
+      return request('POST', '/v1/auth/admin/accept-invite', dto);
+    },
+
+    // Security: own sessions and the server configuration report.
+    listOwnSessions(): Promise<{ items: OwnSessionView[] }> {
+      return request('GET', '/v1/auth/admin/sessions');
+    },
+    revokeOwnSessionFamily(
+      familyId: string,
+    ): Promise<{ revoked: boolean }> {
+      return request('POST', '/v1/auth/admin/sessions/revoke', {
+        familyId,
+      });
+    },
+    revokeOtherSessionFamilies(
+      keepFamilyId: string,
+    ): Promise<{ revokedFamilies: number }> {
+      return request('POST', '/v1/auth/admin/sessions/revoke-others', {
+        keepFamilyId,
+      });
+    },
+    getSecuritySettings(): Promise<SecuritySettingsView> {
+      return request('GET', '/v1/admin/security/settings');
+    },
+
+    // Legal: drafts, publishing, versions, custom documents.
+    createLegalDocument(input: {
+      slug: string;
+      title: string;
+      description?: string;
+    }): Promise<LegalDocument> {
+      return request('POST', '/v1/admin/legal', input);
+    },
+    publishLegalDocument(slug: string): Promise<LegalDocument> {
+      return request(
+        'POST',
+        `/v1/admin/legal/${encodeURIComponent(slug)}/publish`,
+      );
+    },
+    unpublishLegalDocument(slug: string): Promise<LegalDocument> {
+      return request(
+        'POST',
+        `/v1/admin/legal/${encodeURIComponent(slug)}/unpublish`,
+      );
+    },
+    listLegalVersions(slug: string): Promise<{ items: LegalDocumentVersion[] }> {
+      return request(
+        'GET',
+        `/v1/admin/legal/${encodeURIComponent(slug)}/versions`,
+      );
+    },
+    restoreLegalVersion(
+      slug: string,
+      versionId: string,
+    ): Promise<LegalDocument> {
+      return request(
+        'POST',
+        `/v1/admin/legal/${encodeURIComponent(slug)}/versions/${encodeURIComponent(versionId)}/restore`,
+      );
+    },
+    getLegalSyncStatus(): Promise<LegalSyncStatus> {
+      return request('GET', '/v1/admin/legal/sync-status');
+    },
+    getPublicLegalDocument(
+      slug: string,
+    ): Promise<PublicLegalDocument> {
+      return request('GET', `/v1/legal/${encodeURIComponent(slug)}`);
+    },
+
+    // Backups: stored snapshots and maintenance.
+    getBackupSummary(): Promise<BackupSummary> {
+      return request('GET', '/v1/admin/backups/summary');
+    },
+    listStoredBackups(): Promise<{ items: StoredBackup[] }> {
+      return request('GET', '/v1/admin/backups/stored');
+    },
+    createStoredBackup(): Promise<StoredBackup> {
+      return request('POST', '/v1/admin/backups/stored');
+    },
+    downloadStoredBackup(id: string): Promise<{
+      filename: string;
+      content: string;
+      backup: StoredBackup;
+    }> {
+      return request(
+        'GET',
+        `/v1/admin/backups/stored/${encodeURIComponent(id)}/download`,
+      );
+    },
+    deleteStoredBackup(id: string): Promise<{ deleted: boolean }> {
+      return request(
+        'DELETE',
+        `/v1/admin/backups/stored/${encodeURIComponent(id)}`,
+      );
+    },
+    runMaintenance(action: string): Promise<MaintenanceResult> {
+      return request(
+        'POST',
+        `/v1/admin/backups/maintenance/${encodeURIComponent(action)}`,
+      );
+    },
+    createExport(collections?: string[]): Promise<DataExportResult> {
+      return request('POST', '/v1/admin/backups', {
+        collections,
+      });
+    },
+
+    // Integrations: truthful per-integration checks.
+    testIntegration(key: string): Promise<IntegrationTestResult> {
+      return request(
+        'POST',
+        `/v1/admin/integrations/${encodeURIComponent(key)}/test`,
+      );
+    },
+
+    // Reviews: replies, requests, public reads.
+    addReviewReply(
+      id: string,
+      dto: ReviewReplyCreate,
+    ): Promise<ProductReview> {
+      return request(
+        'POST',
+        `/v1/admin/reviews/${encodeURIComponent(id)}/replies`,
+        dto,
+      );
+    },
+    deleteReviewReply(
+      id: string,
+      replyId: string,
+    ): Promise<ProductReview> {
+      return request(
+        'DELETE',
+        `/v1/admin/reviews/${encodeURIComponent(id)}/replies/${encodeURIComponent(replyId)}`,
+      );
+    },
+    requestReview(dto: ReviewRequestCreate): Promise<CommunicationLog> {
+      return request('POST', '/v1/admin/reviews/requests', dto);
+    },
+    listPublicReviews(
+      productId: string,
+    ): Promise<{ items: ProductReview[] }> {
+      return request(
+        'GET',
+        `/v1/catalog/products/${encodeURIComponent(productId)}/reviews`,
+      );
     },
   };
 }

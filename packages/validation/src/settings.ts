@@ -15,6 +15,18 @@ export const storeSettingsUpdateSchema = z
     contactEmail: z.string().trim().email().max(160).optional(),
     contactPhone: z.string().trim().max(40).optional(),
     freeDeliveryOffer: z.boolean().optional(),
+    returnWindowDays: z.number().int().min(0).max(365).optional(),
+    automationLeadEvaluationEnabled: z.boolean().optional(),
+    allowCod: z.boolean().optional(),
+    storeLive: z.boolean().optional(),
+    slaTargets: z
+      .object({
+        urgent: z.object({ firstResponseHours: z.number().min(0).max(720), resolutionHours: z.number().min(0).max(2160) }),
+        high: z.object({ firstResponseHours: z.number().min(0).max(720), resolutionHours: z.number().min(0).max(2160) }),
+        normal: z.object({ firstResponseHours: z.number().min(0).max(720), resolutionHours: z.number().min(0).max(2160) }),
+        low: z.object({ firstResponseHours: z.number().min(0).max(720), resolutionHours: z.number().min(0).max(2160) }),
+      })
+      .optional(),
     deliveryFees: z
       .object({
         dhakaCityMinor: fee,

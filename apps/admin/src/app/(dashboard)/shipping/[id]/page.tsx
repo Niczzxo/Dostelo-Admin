@@ -3,36 +3,30 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import {
-  COURIER_LABELS,
-  SHIPMENT_STATUS_LABELS,
-} from '@dostelo/types';
-import {
-  api,
-  formatDateTime,
-  formatMinor,
-  toUiError,
-} from '../../../../lib/api';
+import { History, Package, RefreshCw, Truck, User } from 'lucide-react';
+import { COURIER_LABELS, SHIPMENT_STATUS_LABELS } from '@dostelo/types';
+import { api, formatDateTime, formatMinor, toUiError } from '../../../../lib/api';
 import { useData } from '../../../../lib/use-data';
 import { expireSession } from '../../../../lib/session';
 import { useAuth } from '../../../../components/auth-provider';
 import {
-  Badge,
+  CardHead,
   EmptyNote,
   ErrorNote,
   LoadingNote,
-  PageHeader,
+  ModuleHeader,
 } from '../../../../components/ui';
 
 /**
- * Shipment detail (Phase 6, chunk 2): the booking record, the
- * recipient and COD snapshot taken from the order, and the full
- * status history with the courier's raw wording preserved.
- * Staff holding shipping.edit can refresh the status from the
- * courier; the refresh answer is shown honestly, including when
- * there is no tracking id to ask about or the courier is not
- * configured. Courier updates move the linked order only
- * through the orders service's legal transitions.
+ * Shipment detail (Phase 6, chunk 2, light redesign): the
+ * booking record, the recipient and COD snapshot taken from
+ * the order, and the full status history with the courier's
+ * raw wording preserved. Staff holding shipping.edit can
+ * refresh the status from the courier; the refresh answer is
+ * shown honestly, including when there is no tracking id to
+ * ask about or the courier is not configured. Courier updates
+ * move the linked order only through the orders service's
+ * legal transitions.
  */
 export default function ShipmentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -41,9 +35,7 @@ export default function ShipmentDetailPage() {
   const permissions = session.principal?.permissions ?? [];
   const canEdit = permissions.includes('shipping.edit');
 
-  const detail = useData((client) => client.getShipment(shipmentId), [
-    shipmentId,
-  ]);
+  const detail = useData((client) => client.getShipment(shipmentId), [shipmentId]);
   const shipment = detail.data?.shipment;
   const events = detail.data?.events ?? [];
 
@@ -78,46 +70,45 @@ export default function ShipmentDetailPage() {
 
   return (
     <section>
-      <PageHeader
+      <ModuleHeader
+        icon={Truck}
         title={shipment ? `Shipment for ${shipment.orderNumber}` : 'Shipment'}
+        description="The booking record, the recipient and COD snapshot from the order, and the full courier status history."
       >
-        <Link href="/shipping">Back to shipments</Link>
-      </PageHeader>
+        <Link className="btn-secondary" href="/shipping">
+          Back to shipments
+        </Link>
+      </ModuleHeader>
 
       {detail.loading ? <LoadingNote label="Loading shipment..." /> : null}
-      {detail.error ? (
-        <ErrorNote error={detail.error} onRetry={detail.reload} />
-      ) : null}
+      {detail.error ? <ErrorNote error={detail.error} onRetry={detail.reload} /> : null}
 
       {shipment ? (
         <>
           {shipment.status === 'not-configured' ? (
             <p className="note error-note" role="alert">
               This courier is not configured in this environment.{' '}
-              {shipment.notConfiguredReason ?? ''} The shipment was
-              recorded for the audit trail only: no parcel was
-              booked and no tracking id exists.
+              {shipment.notConfiguredReason ?? ''} The shipment was recorded for the audit trail
+              only: no parcel was booked and no tracking id exists.
             </p>
           ) : null}
 
           <div className="detail-grid">
             <div className="card">
-              <h2 style={{ fontSize: 16, marginTop: 0 }}>Shipment</h2>
+              <CardHead icon={Package} title="Shipment" />
               <dl className="kv">
                 <dt>Order</dt>
                 <dd>
-                  <Link href={`/orders/${shipment.orderNumber}`}>
-                    {shipment.orderNumber}
-                  </Link>
+                  <Link href={`/orders/${shipment.orderNumber}`}>{shipment.orderNumber}</Link>
                 </dd>
                 <dt>Courier</dt>
                 <dd>{COURIER_LABELS[shipment.courier]}</dd>
                 <dt>Status</dt>
                 <dd>
-                  <Badge>{SHIPMENT_STATUS_LABELS[shipment.status]}</Badge>
+                  <span className="badge">{SHIPMENT_STATUS_LABELS[shipment.status]}</span>
                 </dd>
                 <dt>Tracking id</dt>
-                <dd>{shipment.trackingId ?? 'None'}</dd>
+                <dd>{shipment.trackingId ?? 'Not booked'}</dd>
                 <dt>Last courier status</dt>
                 <dd>{shipment.lastRawStatus ?? 'Not reported yet'}</dd>
                 <dt>COD to collect</dt>
@@ -132,7 +123,7 @@ export default function ShipmentDetailPage() {
             </div>
 
             <div className="card">
-              <h2 style={{ fontSize: 16, marginTop: 0 }}>Recipient</h2>
+              <CardHead icon={User} title="Recipient" />
               <dl className="kv">
                 <dt>Name</dt>
                 <dd>{shipment.recipientName}</dd>
@@ -142,22 +133,14 @@ export default function ShipmentDetailPage() {
                 <dd>{shipment.recipientAddress}</dd>
               </dl>
 
-              <h2 style={{ fontSize: 16, marginTop: 16 }}>
-                Refresh from courier
-              </h2>
+              <h2 style={{ fontSize: 16, marginTop: 16 }}>Refresh from courier</h2>
               {canEdit ? (
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={refreshing}
-                  onClick={refresh}
-                >
-                  {refreshing ? 'Asking the courier...' : 'Refresh status'}
+                <button type="button" className="btn" disabled={refreshing} onClick={refresh}>
+                  <RefreshCw size={15} /> {refreshing ? 'Asking the courier...' : 'Refresh status'}
                 </button>
               ) : (
                 <p className="note muted">
-                  Refreshing a status needs the shipping.edit
-                  permission.
+                  Refreshing a status needs the shipping.edit permission.
                 </p>
               )}
               {refreshNote ? <p className="note">{refreshNote}</p> : null}
@@ -170,7 +153,7 @@ export default function ShipmentDetailPage() {
           </div>
 
           <div className="card section-gap">
-            <h2 style={{ fontSize: 16, marginTop: 0 }}>Status history</h2>
+            <CardHead icon={History} title="Status history" />
             {events.length === 0 ? (
               <EmptyNote>No status events recorded yet.</EmptyNote>
             ) : (
@@ -178,16 +161,12 @@ export default function ShipmentDetailPage() {
                 {events.map((event) => (
                   <li key={event.id}>
                     <div>
-                      <Badge>{SHIPMENT_STATUS_LABELS[event.status]}</Badge>{' '}
+                      <span className="badge">{SHIPMENT_STATUS_LABELS[event.status]}</span>{' '}
                       <span className="muted">via {event.source}</span>
                     </div>
-                    {event.rawStatus ? (
-                      <div>Courier reported: {event.rawStatus}</div>
-                    ) : null}
+                    {event.rawStatus ? <div>Courier reported: {event.rawStatus}</div> : null}
                     {event.note ? <div>{event.note}</div> : null}
-                    <div className="when">
-                      {formatDateTime(event.createdAt)}
-                    </div>
+                    <div className="when">{formatDateTime(event.createdAt)}</div>
                   </li>
                 ))}
               </ul>

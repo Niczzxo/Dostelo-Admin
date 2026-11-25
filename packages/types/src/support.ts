@@ -8,7 +8,10 @@
  */
 export const SUPPORT_TICKET_STATUSES = [
   'open',
+  'in-progress',
   'pending',
+  'waiting-customer',
+  'waiting-staff',
   'resolved',
   'closed',
 ] as const;
@@ -19,9 +22,52 @@ export const SUPPORT_TICKET_STATUS_LABELS: Record<
   string
 > = {
   open: 'Open',
+  'in-progress': 'In Progress',
   pending: 'Pending',
+  'waiting-customer': 'Waiting for Customer',
+  'waiting-staff': 'Waiting for Staff',
   resolved: 'Resolved',
   closed: 'Closed',
+};
+
+/** Legal ticket status transitions, enforced server-side.
+ * Closed is terminal; a closed ticket is never reopened by a
+ * status change (staff create a new ticket instead). */
+export const SUPPORT_TICKET_TRANSITIONS: Record<
+  SupportTicketStatus,
+  SupportTicketStatus[]
+> = {
+  open: ['in-progress', 'pending', 'waiting-customer', 'waiting-staff', 'resolved', 'closed'],
+  'in-progress': ['pending', 'waiting-customer', 'waiting-staff', 'resolved', 'closed'],
+  pending: ['open', 'in-progress', 'waiting-customer', 'waiting-staff', 'resolved', 'closed'],
+  'waiting-customer': ['open', 'in-progress', 'waiting-staff', 'resolved', 'closed'],
+  'waiting-staff': ['open', 'in-progress', 'waiting-customer', 'resolved', 'closed'],
+  resolved: ['open', 'in-progress', 'closed'],
+  closed: [],
+};
+
+/** How the ticket reached the store, recorded honestly at
+ * creation. 'admin' means staff created it in the portal; the
+ * other values are the channel the customer actually used. */
+export const SUPPORT_CHANNELS = [
+  'admin',
+  'phone',
+  'website',
+  'whatsapp',
+  'email',
+  'messenger',
+  'in-person',
+] as const;
+export type SupportChannel = (typeof SUPPORT_CHANNELS)[number];
+
+export const SUPPORT_CHANNEL_LABELS: Record<SupportChannel, string> = {
+  admin: 'Admin created',
+  phone: 'Phone',
+  website: 'Website form',
+  whatsapp: 'WhatsApp',
+  email: 'Email',
+  messenger: 'Messenger',
+  'in-person': 'In person',
 };
 
 export const SUPPORT_PRIORITIES = [
@@ -55,6 +101,12 @@ export interface SupportTicket {
   assignedToId: string | null;
   /** Order the ticket is about, when it quotes one. */
   orderNumber: string | null;
+  /** The channel the ticket actually arrived through. */
+  channel: SupportChannel;
+  /** When staff first sent a customer-facing reply. */
+  firstRespondedAt: string | null;
+  /** When the ticket was resolved; cleared if it reopens. */
+  resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

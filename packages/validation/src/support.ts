@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { SUPPORT_PRIORITIES, SUPPORT_TICKET_STATUSES } from '@dostelo/types';
+import {
+  SUPPORT_CHANNELS,
+  SUPPORT_PRIORITIES,
+  SUPPORT_TICKET_STATUSES,
+} from '@dostelo/types';
 
 /**
  * Support ticket schemas. Tickets are staff-created; the opening
@@ -15,6 +19,7 @@ export const createSupportTicketSchema = z
     subject: z.string().trim().min(1).max(200),
     category: z.string().trim().max(80).optional(),
     priority: z.enum(SUPPORT_PRIORITIES).optional(),
+    channel: z.enum(SUPPORT_CHANNELS).optional(),
     orderNumber: z.string().trim().max(40).optional(),
     message: z.string().trim().min(1).max(5000),
   })

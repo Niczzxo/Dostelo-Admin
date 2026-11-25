@@ -72,8 +72,10 @@ export interface CommunicationLog {
   id: string;
   channel: CommunicationChannel;
   /** 'automated' for provider sends and call tasks, 'manual-call'
-   * for calls staff placed and logged themselves. */
-  kind: 'automated' | 'manual-call';
+   * for calls staff placed and logged themselves, 'staff-message'
+   * for a message a staff member sent from the Communication
+   * Center. */
+  kind: 'automated' | 'manual-call' | 'staff-message';
   status: CommunicationLogStatus;
   /** Phone number or email address the message was addressed to.
    * Null only when the attempt was refused for having no address. */
@@ -82,6 +84,9 @@ export interface CommunicationLog {
   visitorId: string | null;
   leadId: string | null;
   abandonedCartId: string | null;
+  /** The marketing campaign this entry belongs to, when a
+   * campaign send recorded it. Null for every other flow. */
+  campaignId: string | null;
   /** Template the body was rendered from, when one was used. */
   templateKey: string | null;
   subject: string | null;

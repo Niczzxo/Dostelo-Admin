@@ -57,6 +57,14 @@ export interface RecoveryStep {
 /** The stored recovery configuration (the RecoveryCampaign data
  * of docs/BACKEND_AND_DATABASE.md, kept as one settings record). */
 export interface RecoverySettings {
+  /** Master switch for the recovery automation. When false the
+   * scan still closes or recovers open recoveries, but no new
+   * carts are detected and no scheduled step runs. */
+  enabled: boolean;
+  /** Switch for the reminder sequence only: detection keeps
+   * opening recoveries, but scheduled steps wait (they stay
+   * scheduled and run when the sequence is switched back on). */
+  sequenceEnabled: boolean;
   /** Minutes of cart inactivity before detection. */
   abandonedAfterMinutes: number;
   /** Days a recovery token stays valid after detection. */
@@ -68,6 +76,8 @@ export interface RecoverySettings {
  * after 1 hour, an email after 24 hours, and a staff call task
  * after 72 hours. */
 export const DEFAULT_RECOVERY_SETTINGS: RecoverySettings = {
+  enabled: true,
+  sequenceEnabled: true,
   abandonedAfterMinutes: 60,
   tokenTtlDays: 30,
   steps: [

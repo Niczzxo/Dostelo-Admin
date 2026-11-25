@@ -17,6 +17,23 @@ export const INTEGRATION_CATEGORY_LABELS: Record<
   shipping: 'Shipping & Courier',
 };
 
+/**
+ * The result of one integration check (Integrations redesign).
+ * The check is truthful by construction: an unconfigured
+ * integration reports not-configured with its missing variable
+ * names; an internal integration (COD, manual banking) reports
+ * its internal flow state; a configured external integration
+ * reports that its credentials are present. No live probe is
+ * performed against a provider, and the result never claims one.
+ */
+export interface IntegrationTestResult {
+  key: string;
+  configured: boolean;
+  checkedAt: string;
+  detail: string;
+  missing: string[];
+}
+
 export interface IntegrationStatus {
   key: string;
   name: string;

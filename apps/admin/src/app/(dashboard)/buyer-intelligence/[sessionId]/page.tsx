@@ -2,15 +2,18 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { Gauge, ListOrdered, UserSearch } from 'lucide-react';
 import { IDENTITY_STATUS_LABELS } from '@dostelo/types';
 import { formatDateTime, formatMinor } from '../../../../lib/api';
 import { useData } from '../../../../lib/use-data';
 import {
   Badge,
+  CardHead,
   EmptyNote,
   ErrorNote,
   LoadingNote,
-  PageHeader,
+  ModuleHeader,
+  ScoreBand,
 } from '../../../../components/ui';
 
 /**
@@ -21,6 +24,10 @@ import {
  * session scored what it scored. No contact details exist at
  * this level by design; contact happens through a lead, where
  * the basis is recorded.
+ *
+ * Redesign note: this page keeps its original logic and data;
+ * only the presentation moved into the shared card language
+ * (ModuleHeader, cards with CardHead, ScoreBand).
  */
 
 const BREAKDOWN_LABELS: Array<{
@@ -73,9 +80,15 @@ export default function BuyerSessionDetailPage() {
 
   return (
     <section>
-      <PageHeader title="Session detail">
-        <Link href="/buyer-intelligence">Back to sessions</Link>
-      </PageHeader>
+      <ModuleHeader
+        icon={UserSearch}
+        title="Session detail"
+        description="One tracked session: its recorded identity, score breakdown and full event timeline."
+      >
+        <Link className="btn-secondary btn-small" href="/buyer-intelligence">
+          Back to sessions
+        </Link>
+      </ModuleHeader>
 
       {detail.loading ? <LoadingNote label="Loading session..." /> : null}
       {detail.error ? (
@@ -86,7 +99,7 @@ export default function BuyerSessionDetailPage() {
         <>
           <div className="detail-grid">
             <div className="card">
-              <h2 style={{ fontSize: 16, marginTop: 0 }}>Session</h2>
+              <CardHead icon={UserSearch} title="Session" />
               <dl className="kv">
                 <dt>Identity status</dt>
                 <dd>
@@ -129,9 +142,13 @@ export default function BuyerSessionDetailPage() {
               </dl>
             </div>
             <div className="card">
-              <h2 style={{ fontSize: 16, marginTop: 0 }}>
-                Lead score: {session.leadScore} ({session.leadBand})
-              </h2>
+              <CardHead
+                icon={Gauge}
+                title={`Lead score: ${session.leadScore} (${session.leadBand})`}
+              />
+              <div style={{ marginBottom: 10 }}>
+                <ScoreBand score={session.leadScore} />
+              </div>
               <dl className="kv">
                 {BREAKDOWN_LABELS.map(({ key, label, hint }) => (
                   <div key={key} style={{ display: 'contents' }}>
@@ -152,30 +169,30 @@ export default function BuyerSessionDetailPage() {
             </div>
           </div>
 
-          <h2 className="section-gap" style={{ fontSize: 18 }}>
-            Event timeline
-          </h2>
-          {session.events.length === 0 ? (
-            <EmptyNote>No events recorded for this session.</EmptyNote>
-          ) : (
-            <ul className="timeline">
-              {session.events.map((event) => {
-                const payload = payloadText(event.payload);
-                return (
-                  <li key={event.id}>
-                    <div>
-                      <Badge>{event.type}</Badge>
-                    </div>
-                    {event.path ? <div>{event.path}</div> : null}
-                    {payload ? <div>{payload}</div> : null}
-                    <div className="when">
-                      {formatDateTime(event.occurredAt)}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          <div className="card section-gap">
+            <CardHead icon={ListOrdered} title="Event timeline" />
+            {session.events.length === 0 ? (
+              <EmptyNote>No events recorded for this session.</EmptyNote>
+            ) : (
+              <ul className="timeline">
+                {session.events.map((event) => {
+                  const payload = payloadText(event.payload);
+                  return (
+                    <li key={event.id}>
+                      <div>
+                        <Badge>{event.type}</Badge>
+                      </div>
+                      {event.path ? <div>{event.path}</div> : null}
+                      {payload ? <div>{payload}</div> : null}
+                      <div className="when">
+                        {formatDateTime(event.occurredAt)}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </>
       ) : null}
     </section>

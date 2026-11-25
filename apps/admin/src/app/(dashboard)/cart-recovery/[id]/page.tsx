@@ -3,16 +3,18 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { ArrowLeft, MessageCircle, Play, ShoppingCart, XCircle } from 'lucide-react';
 import { api, formatDateTime, formatMinor, toUiError } from '../../../../lib/api';
 import { useData } from '../../../../lib/use-data';
 import { expireSession } from '../../../../lib/session';
 import { useAuth } from '../../../../components/auth-provider';
 import {
   Badge,
+  CardHead,
   EmptyNote,
   ErrorNote,
   LoadingNote,
-  PageHeader,
+  ModuleHeader,
 } from '../../../../components/ui';
 
 /**
@@ -84,9 +86,15 @@ export default function CartRecoveryDetailPage() {
 
   return (
     <section>
-      <PageHeader title="Recovery detail">
-        <Link href="/cart-recovery">Back to recoveries</Link>
-      </PageHeader>
+      <ModuleHeader
+        icon={ShoppingCart}
+        title="Recovery detail"
+        description="The recovery record, its scheduled steps and every communication the sequence and staff produced for this cart."
+      >
+        <Link href="/cart-recovery" className="btn btn-secondary">
+          <ArrowLeft size={15} /> Back to recoveries
+        </Link>
+      </ModuleHeader>
 
       {detail.loading ? <LoadingNote label="Loading recovery..." /> : null}
       {detail.error ? (
@@ -97,7 +105,7 @@ export default function CartRecoveryDetailPage() {
         <>
           <div className="detail-grid">
             <div className="card">
-              <h2 style={{ fontSize: 16, marginTop: 0 }}>Recovery</h2>
+              <CardHead icon={ShoppingCart} title="Recovery" />
               <dl className="kv">
                 <dt>Status</dt>
                 <dd>
@@ -146,7 +154,7 @@ export default function CartRecoveryDetailPage() {
             </div>
 
             <div className="card">
-              <h2 style={{ fontSize: 16, marginTop: 0 }}>Actions</h2>
+              <CardHead icon={Play} title="Actions" />
               {canEdit && active ? (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button
@@ -155,6 +163,7 @@ export default function CartRecoveryDetailPage() {
                     disabled={busy !== null}
                     onClick={() => act('run')}
                   >
+                    <Play size={14} />{' '}
                     {busy === 'run' ? 'Running...' : 'Run next step now'}
                   </button>
                   <button
@@ -163,6 +172,7 @@ export default function CartRecoveryDetailPage() {
                     disabled={busy !== null}
                     onClick={() => act('cancel')}
                   >
+                    <XCircle size={14} />{' '}
                     {busy === 'cancel' ? 'Cancelling...' : 'Cancel recovery'}
                   </button>
                 </div>
@@ -188,9 +198,7 @@ export default function CartRecoveryDetailPage() {
 
           <div className="detail-grid section-gap">
             <div className="card">
-              <h2 style={{ fontSize: 16, marginTop: 0 }}>
-                Sequence attempts
-              </h2>
+              <CardHead icon={ShoppingCart} title="Sequence attempts" />
               {attempts.length === 0 ? (
                 <EmptyNote>No steps have been scheduled yet.</EmptyNote>
               ) : (
@@ -222,7 +230,7 @@ export default function CartRecoveryDetailPage() {
             </div>
 
             <div className="card">
-              <h2 style={{ fontSize: 16, marginTop: 0 }}>Communications</h2>
+              <CardHead icon={MessageCircle} title="Communications" />
               {communications.length === 0 ? (
                 <EmptyNote>
                   No messages or call tasks recorded for this recovery

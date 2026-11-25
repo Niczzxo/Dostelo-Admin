@@ -7,8 +7,8 @@ import type { DeliveryZone } from './order';
  * carts) computed at read time; reports own no stored data.
  */
 export interface SalesByDay {
-  /** Calendar date (YYYY-MM-DD) in the store's local terms, taken
-   * from the order's UTC timestamp date part. */
+  /** Calendar date (YYYY-MM-DD) in Asia/Dhaka, the store
+   * timezone the Reports definitions use for day boundaries. */
   date: string;
   orders: number;
   revenueMinor: number;

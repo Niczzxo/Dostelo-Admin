@@ -27,6 +27,8 @@ export type RecoveryStepInput = z.infer<typeof recoveryStepSchema>;
 
 export const recoverySettingsUpdateSchema = z
   .object({
+    enabled: z.boolean().optional(),
+    sequenceEnabled: z.boolean().optional(),
     abandonedAfterMinutes: z.number().int().min(1).max(60 * 24 * 7).optional(),
     tokenTtlDays: z.number().int().min(1).max(365).optional(),
     steps: z.array(recoveryStepSchema).min(1).max(10).optional(),
@@ -34,6 +36,8 @@ export const recoverySettingsUpdateSchema = z
   .strict()
   .refine(
     (data) =>
+      data.enabled !== undefined ||
+      data.sequenceEnabled !== undefined ||
       data.abandonedAfterMinutes !== undefined ||
       data.tokenTtlDays !== undefined ||
       data.steps !== undefined,
@@ -60,3 +64,52 @@ export const manualCallLogSchema = z
   })
   .strict();
 export type ManualCallLog = z.infer<typeof manualCallLogSchema>;
+
+/**
+ * Staff-edited message template (Communication Center and Cart
+ * Recovery). The key comes from the route; the body is validated
+ * again in the service, which rejects placeholders outside the
+ * known variable set the send flows actually supply.
+ */
+export const messageTemplateUpsertSchema = z
+  .object({
+    channel: z.enum(COMMUNICATION_CHANNELS),
+    subject: z.string().trim().max(200).nullable().optional(),
+    body: z.string().trim().min(1).max(4000),
+  })
+  .strict();
+export type MessageTemplateUpsert = z.infer<
+  typeof messageTemplateUpsertSchema
+>;
+
+/**
+ * A staff-initiated message from the Communication Center. The
+ * send goes through the same CommunicationsService path as the
+ * automated flows: suppression and consent are checked first and
+ * an unconfigured provider records not-configured. Either a
+ * template or an explicit body is required.
+ */
+export const staffSendSchema = z
+  .object({
+    channel: z.enum(['whatsapp', 'email', 'sms']),
+    to: z.string().trim().min(3).max(200),
+    customerId: z.string().min(1).optional(),
+    leadId: z.string().min(1).optional(),
+    abandonedCartId: z.string().min(1).optional(),
+    templateKey: z.string().trim().min(1).max(80).optional(),
+    subject: z.string().trim().max(200).optional(),
+    body: z.string().trim().min(1).max(4000).optional(),
+    purpose: z.string().trim().min(2).max(80),
+  })
+  .strict()
+  .refine((data) => Boolean(data.templateKey || data.body), {
+    message: 'Provide a templateKey or an explicit body',
+  })
+  .refine(
+    (data) =>
+      data.channel === 'email'
+        ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.to)
+        : bdPhoneSchema.safeParse(data.to).success,
+    { message: 'The address does not match the channel' },
+  );
+export type StaffSend = z.infer<typeof staffSendSchema>;

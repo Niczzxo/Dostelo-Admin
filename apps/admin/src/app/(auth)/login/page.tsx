@@ -64,6 +64,8 @@ export default function LoginPage() {
     <main
       style={{
         alignItems: 'center',
+        background:
+          'radial-gradient(900px 500px at 15% 10%, rgba(124, 92, 255, 0.45), transparent 60%), radial-gradient(800px 480px at 85% 90%, rgba(199, 80, 155, 0.28), transparent 60%), linear-gradient(135deg, #0d0a24 0%, #171238 48%, #241a52 100%)',
         display: 'flex',
         justifyContent: 'center',
         minHeight: '100vh',
@@ -75,12 +77,32 @@ export default function LoginPage() {
         style={{
           background: 'var(--surface)',
           border: '1px solid var(--line)',
-          borderRadius: 'var(--r-lg)',
-          maxWidth: 380,
-          padding: 32,
+          borderRadius: 20,
+          boxShadow: '0 24px 70px rgba(5, 3, 24, 0.5)',
+          maxWidth: 400,
+          padding: 36,
           width: '100%',
         }}
       >
+        <div
+          aria-hidden="true"
+          style={{
+            alignItems: 'center',
+            background:
+              'linear-gradient(135deg, #7c5cff 0%, #a855f7 55%, #c7509b 100%)',
+            borderRadius: 14,
+            color: '#ffffff',
+            display: 'flex',
+            fontSize: 22,
+            fontWeight: 800,
+            height: 48,
+            justifyContent: 'center',
+            marginBottom: 16,
+            width: 48,
+          }}
+        >
+          D
+        </div>
         <div
           style={{
             color: 'var(--ink)',
@@ -92,7 +114,7 @@ export default function LoginPage() {
           DOSTELO
         </div>
         <p style={{ color: 'var(--muted)', marginTop: 4 }}>
-          Admin sign in. Staff only.
+          Admin Portal. Staff only, sign in to continue.
         </p>
 
         {challenge ? (

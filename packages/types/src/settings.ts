@@ -40,7 +40,39 @@ export interface StoreSettingsView {
   deliveryFees: DeliveryFeeSettings;
   manualInstructions: ManualInstructionsMap;
   loyaltyRules: LoyaltyRules;
+  /** Days after delivery during which a return can be opened
+   * (Returns module). Enforced server-side at creation. */
+  returnWindowDays: number;
+  /** Enable flag for the lead candidate evaluation automation.
+   * When off, visitor evaluation creates no new lead candidates
+   * (existing leads are untouched). */
+  automationLeadEvaluationEnabled: boolean;
+  /** Whether Cash on Delivery is accepted at checkout. When
+   * off, the checkout path refuses COD orders server-side. */
+  allowCod: boolean;
+  /** Whether the store is live. When off, the public catalogue
+   * and checkout endpoints return a store-closed response. */
+  storeLive: boolean;
+  /** Support SLA targets by priority, in hours (Support
+   * redesign). Elapsed-time math only: no business-hours or
+   * holiday calendar exists. */
+  slaTargets: SlaTargets;
 }
+
+/** First response and resolution targets per ticket priority. */
+export interface SlaTargets {
+  urgent: { firstResponseHours: number; resolutionHours: number };
+  high: { firstResponseHours: number; resolutionHours: number };
+  normal: { firstResponseHours: number; resolutionHours: number };
+  low: { firstResponseHours: number; resolutionHours: number };
+}
+
+export const DEFAULT_SLA_TARGETS: SlaTargets = {
+  urgent: { firstResponseHours: 1, resolutionHours: 4 },
+  high: { firstResponseHours: 4, resolutionHours: 24 },
+  normal: { firstResponseHours: 8, resolutionHours: 48 },
+  low: { firstResponseHours: 24, resolutionHours: 72 },
+};
 
 export const DEFAULT_STORE_PROFILE = {
   storeName: 'Dostelo',
