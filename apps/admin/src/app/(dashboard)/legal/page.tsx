@@ -52,9 +52,10 @@ import {
  * the API records; nothing is hardcoded here.
  *
  * Storefront boundary, stated plainly: the Next.js storefront
- * policy routes exist for shipping, returns and warranty; the
- * static GitHub Pages live site has its policy text built in and
- * does not read this API.
+ * policy routes render the published document for their slug
+ * and fall back to their built-in text when nothing is
+ * published; the static GitHub Pages live site has its policy
+ * text built in and does not read this API.
  */
 
 const PAGE_SIZE = 10;
@@ -663,10 +664,11 @@ export default function LegalPage() {
             </ul>
           ) : null}
           <p className="note muted">
-            Boundary: the Next.js storefront policy routes exist for
-            shipping, returns and warranty; the static GitHub Pages
-            live site has its policy text built in and does not read
-            this API.
+            Boundary: the Next.js storefront policy routes render
+            the published document for their slug and fall back to
+            their built-in text when nothing is published; the
+            static GitHub Pages live site has its policy text built
+            in and does not read this API.
           </p>
         </Modal>
       ) : null}
@@ -742,7 +744,7 @@ function SyncCard({
         <>
           <p className="note" style={{ marginTop: 0 }}>
             {sync.publishedCount === 0
-              ? 'Storefront link pending. Save and publish your policy documents to make them available on the storefront.'
+              ? 'Nothing is published yet. Until a document is published here, the storefront shows its built-in policy text.'
               : `Serving ${sync.publishedCount} published document${sync.publishedCount === 1 ? '' : 's'} through the public endpoint.`}
           </p>
           <dl className="kv">

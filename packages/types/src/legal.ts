@@ -1,10 +1,11 @@
 /**
  * Legal and compliance documents (admin master structure module
  * 24: Legal & Compliance). The documents are stored as editable
- * settings documents. The migrated storefront's policy views
- * still render their ported legacy text, so a stored document is
- * the prepared source of truth, not yet what the storefront
- * serves; the admin page states that plainly.
+ * settings documents. The Next.js storefront's policy routes
+ * render the published copy for their slug when one exists and
+ * fall back to their ported legacy text when none does; the
+ * static GitHub Pages site never reads this API and keeps its
+ * built-in policy text.
  */
 export const LEGAL_DOCUMENT_SLUGS = [
   'privacy',
