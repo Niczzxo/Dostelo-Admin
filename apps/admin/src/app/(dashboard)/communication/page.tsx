@@ -1189,7 +1189,7 @@ function SendPanel({
   const previewBody = body.trim()
     ? body
     : template
-      ? renderPreview(template.body, contact?.name ?? 'Sample name')
+      ? renderPreview(template.body, contact?.name ?? '[sample name]')
       : '';
   const previewSubject = subject.trim()
     ? subject

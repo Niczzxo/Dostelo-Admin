@@ -528,9 +528,9 @@ function CannedModal({ templates, loading, error, canEdit, onClose, onChanged }:
     return [...map.entries()];
   }, [templates]);
   const preview = body
-    .replaceAll('{{customerName}}', 'Sample Customer')
-    .replaceAll('{{orderNumber}}', 'DST-1001')
-    .replaceAll('{{name}}', 'Sample Customer');
+    .replaceAll('{{customerName}}', '[customer name]')
+    .replaceAll('{{orderNumber}}', '[order number]')
+    .replaceAll('{{name}}', '[customer name]');
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();

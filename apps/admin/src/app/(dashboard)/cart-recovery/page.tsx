@@ -78,15 +78,21 @@ const TEMPLATE_VARIABLES = [
   '{{recovery_link}}',
 ] as const;
 
+/**
+ * Preview placeholders only: the template preview never renders
+ * invented personal data, so every variable is shown as a
+ * bracketed placeholder naming what the server will fill in at
+ * send time.
+ */
 const SAMPLE_VALUES: Record<string, string> = {
-  customer_name: 'Ayesha',
-  firstName: 'Ayesha',
-  product_name: 'Sample product',
-  itemCount: '2',
-  cart_total: formatMinor(185000),
-  total: formatMinor(185000),
-  recovery_link: 'https://example.com/recover/sample-token',
-  recoveryLink: 'https://example.com/recover/sample-token',
+  customer_name: '[customer name]',
+  firstName: '[customer name]',
+  product_name: '[product name]',
+  itemCount: '[item count]',
+  cart_total: '[cart total]',
+  total: '[cart total]',
+  recovery_link: '[recovery link]',
+  recoveryLink: '[recovery link]',
 };
 
 function renderWithSamples(text: string): string {
