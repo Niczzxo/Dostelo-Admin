@@ -1,18 +1,13 @@
-import type { PermissionKey } from '@dostelo/types';
+import type { PermissionKey } from './types';
 
-/**
- * The 25 admin modules from the admin master structure, in the
- * structure's sidebar order. `permission` is the view permission
- * for the module: the sidebar hides items the signed-in role
- * cannot view, and the API enforces the same keys server-side.
- * `functional` marks the modules wired to the live API; all 25
- * modules are wired. A module whose page performs only honest
- * structure rendering would stay false here.
- */
+/* The 25 admin modules from the admin master structure, in the
+   structure's sidebar order. `permission` is the view permission
+   for the module: the sidebar hides items the signed-in role
+   cannot view, and the API enforces the same keys server-side.
+   Every module is wired to the live API in this rebuild. */
 export interface AdminModule {
   label: string;
   href: string;
-  /** Path segment used by the structure-page catch-all route. */
   slug: string;
   permission: PermissionKey;
   functional: boolean;
@@ -28,7 +23,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'dashboard.read',
     functional: true,
     purpose:
-      'Live operating picture: payment totals, recent orders, catalogue size and low stock.',
+      'Live operating picture: payment totals, recent orders, catalogue size and low stock, all read from the API.',
     phase: 'Phase 4',
   },
   {
@@ -68,7 +63,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'recovery.read',
     functional: true,
     purpose:
-      'Abandoned cart recovery: inactive cart detection, stored recovery sequences, suppression lists and consented recovery messages.',
+      'Abandoned cart recovery: inactive cart detection, stored recovery sequences, suppression and consented recovery messages.',
     phase: 'Phase 6',
   },
   {
@@ -98,7 +93,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'products.read',
     functional: true,
     purpose:
-      'Catalogue browsing with variants and live stock, including guarded inventory adjustments.',
+      'Catalogue with variants and live stock, image upload, cost price and guarded inventory adjustments.',
     phase: 'Phase 4',
   },
   {
@@ -108,7 +103,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'inventory.read',
     functional: true,
     purpose:
-      'Stock levels per variant with on-hand, reserved and available counts, a low-stock view, and audited stock adjustments.',
+      'Stock per variant and per warehouse, transfers, and the complete stock movement history.',
     phase: 'Phase 4',
   },
   {
@@ -118,7 +113,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'payments.read',
     functional: true,
     purpose:
-      'Payment reconciliation: gateway and status filters, manual payment verification and refunds.',
+      'Payment reconciliation, settlements, gateway fees, manual verification and refunds.',
     phase: 'Phase 4',
   },
   {
@@ -128,7 +123,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'shipping.read',
     functional: true,
     purpose:
-      'Courier booking and tracking with Pathao, Steadfast and RedX, plus delivery status sync into the order flow.',
+      'Courier booking and tracking with Pathao, Steadfast and RedX, exception tasks and courier COD settlements.',
     phase: 'Phase 6',
   },
   {
@@ -138,7 +133,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'orders.read',
     functional: true,
     purpose:
-      'Returns and exchange intake, inspection outcomes and refund hand-off to Payments.',
+      'Returns and exchange intake, evidence, inspection outcomes and refund hand-off to Payments.',
     phase: 'Phase 4',
   },
   {
@@ -148,7 +143,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'marketing.read',
     functional: true,
     purpose:
-      'Campaign records with draft and scheduled states. Sending follows each channel provider configuration and is reported honestly per campaign.',
+      'Campaigns with draft, scheduled and sent states, delivery, read and click tracking, and attribution. Sending follows provider configuration and is reported honestly.',
     phase: 'Phase 4',
   },
   {
@@ -158,7 +153,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'settings.manage',
     functional: true,
     purpose:
-      'Background automations: recovery workers, notification triggers and scheduled jobs.',
+      'Workflow builder with custom triggers and branching steps, stored automations, scoring thresholds and the execution log.',
     phase: 'Phase 6',
   },
   {
@@ -168,7 +163,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'customers.read',
     functional: true,
     purpose:
-      'Support inbox and case handling tied to customer and order records.',
+      'Support inbox and case handling tied to customer and order records, with attachments, public intake and business-hours SLA indicators.',
     phase: 'Phase 5',
   },
   {
@@ -177,7 +172,8 @@ export const ADMIN_MODULES: AdminModule[] = [
     slug: 'reviews',
     permission: 'marketing.read',
     functional: true,
-    purpose: 'Product reviews, moderation and store reputation signals.',
+    purpose:
+      'Storefront-submitted product reviews, moderation, replies and review request links.',
     phase: 'Phase 4',
   },
   {
@@ -187,7 +183,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'marketing.read',
     functional: true,
     purpose:
-      'Loyalty points: the earn rules, per-customer balances derived from delivered orders, and audited manual adjustments.',
+      'Loyalty points, rewards catalogue, redemptions, tiers, referral codes, point rules and expiration visibility.',
     phase: 'Phase 6',
   },
   {
@@ -197,7 +193,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'reports.read',
     functional: true,
     purpose:
-      'Sales by day, top products, delivery zone split, payment method split and cart recovery performance, aggregated live from the orders, payments and recovery stores.',
+      'Sales, profit from real cost data, top products, zone and payment splits, saved custom reports and schedules, aggregated live from the API.',
     phase: 'Phase 4',
   },
   {
@@ -217,7 +213,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'settings.manage',
     functional: true,
     purpose:
-      'Staff notification feed derived from pending orders, low stock and abandoned cart detections, with per-staff read state.',
+      'Staff notification feed derived from pending orders, low stock and abandoned cart detections, with per-staff read state and preferences.',
     phase: 'Phase 6',
   },
   {
@@ -227,7 +223,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'staff.manage',
     functional: true,
     purpose:
-      'Staff accounts and role assignment: invite by creating an account with a temporary password, deactivate accounts and force logout by revoking sessions. The roles matrix itself is live under Security & Access.',
+      'Staff accounts and role assignment: invite, create, deactivate and revoke sessions. The roles matrix itself is live under Security & Access.',
     phase: 'Phase 4',
   },
   {
@@ -237,7 +233,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'audit.read',
     functional: true,
     purpose:
-      'The live roles and permissions matrix, the audit log viewer, and MFA self-service for the signed-in admin.',
+      'The live roles and permissions matrix, the audit log viewer, security settings, own sessions and MFA self-service.',
     phase: 'Phase 4',
   },
   {
@@ -247,7 +243,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'settings.manage',
     functional: true,
     purpose:
-      'Connected services: payment gateways, couriers, WhatsApp and email providers, with credential status.',
+      'Provider configuration for payments, WhatsApp, email, SMS and couriers, showing variable names and set or missing state only, never secret values.',
     phase: 'Phase 6',
   },
   {
@@ -257,7 +253,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'settings.manage',
     functional: true,
     purpose:
-      'Editable legal documents (privacy, terms, returns, refund, shipping, warranty) stored in the API. The storefront still serves its ported policy text; wiring it to these documents is pending.',
+      'Editable legal documents (privacy, terms, returns, refund, shipping, warranty) stored in the API, with versions and publish state.',
     phase: 'Phase 7',
   },
   {
@@ -267,11 +263,10 @@ export const ADMIN_MODULES: AdminModule[] = [
     permission: 'settings.manage',
     functional: true,
     purpose:
-      'On-demand JSON data exports of the platform core stores, with a recorded export history. No external backup storage is connected.',
+      'Data exports, stored backups with checksums, a guarded multi-step restore, and maintenance actions. Restore is super admin only and always takes a safety backup first.',
     phase: 'Phase 7',
   },
 ];
-
 export function moduleBySlug(slug: string): AdminModule | null {
-  return ADMIN_MODULES.find((module_) => module_.slug === slug) ?? null;
+  return ADMIN_MODULES.find((m) => m.slug === slug) ?? null;
 }

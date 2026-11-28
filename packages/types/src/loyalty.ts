@@ -145,3 +145,43 @@ export interface LoyaltyBalance {
   /** What the balance is worth at the current rules. */
   balanceValue: Money;
 }
+
+/** One entry in the customer-facing loyalty activity list. */
+export interface LoyaltyAccountTransactionView {
+  id: string;
+  points: number;
+  reason: string;
+  createdAt: string;
+}
+
+/** Customer-facing loyalty account (the GET /v1/loyalty/me
+ * contract the storefront account panel renders). Additive
+ * contract types added 2026-11-28 for the storefront rebuild:
+ * the API does not serve this endpoint yet, and the storefront
+ * renders its honest unavailable state until it does. */
+export interface LoyaltyAccountView {
+  balance: number;
+  lifetimePoints: number;
+  tier: { id: string; name: string };
+  referralCode: string | null;
+  transactions: LoyaltyAccountTransactionView[];
+}
+
+/** A points redemption reward offered to customers. */
+export interface LoyaltyReward {
+  id: string;
+  name: string;
+  pointsCost: number;
+  /** Discount the reward grants, in minor units (poisha). */
+  discountMinor: number;
+}
+
+/** A completed points redemption. */
+export interface LoyaltyRedemption {
+  id: string;
+  rewardId: string;
+  pointsSpent: number;
+  /** Code the customer quotes to claim the reward. */
+  code: string;
+  createdAt: string;
+}

@@ -1,19 +1,12 @@
-import type { AuthPrincipalView, AuthTokens } from '@dostelo/types';
+import type { AuthPrincipalView, AuthTokens } from './types';
 
-/**
- * Admin session store (Phase 4, chunk 2).
- *
- * Storage choice, and its trade-off (also documented in the admin
- * README): the access token lives only in memory in this module,
- * so it never persists anywhere an XSS payload or a later visitor
- * of the machine could read it back, at the cost of a refresh
- * round-trip on every full page load. The refresh token lives in
- * sessionStorage: it survives reloads within the tab session but
- * is cleared when the tab closes, and it is never written to
- * localStorage or a cookie. The API stores only a hash of the
- * refresh token and rotates it on every use, so a leaked value
- * has a short useful life and reuse revokes the session family.
- */
+/* Admin session store, fresh rebuild 2026-11-28.
+   The access token lives only in memory in this module, so it is
+   never persisted where a later visitor of the machine could read
+   it back. The refresh token lives in sessionStorage: it survives
+   reloads inside the tab session, clears when the tab closes, and
+   is never written to localStorage or a cookie. The API stores
+   only a hash of the refresh token and rotates it on every use. */
 
 const REFRESH_TOKEN_KEY = 'dostelo-admin-refresh-token';
 
@@ -22,8 +15,6 @@ export type SessionStatus = 'restoring' | 'signed-in' | 'signed-out';
 export interface SessionSnapshot {
   status: SessionStatus;
   principal: AuthPrincipalView | null;
-  /** Display name decoded from the access token's name claim.
-   * Presentation only; the API verifies the token itself. */
   displayName: string | null;
 }
 
@@ -63,7 +54,6 @@ export function getSessionSnapshot(): SessionSnapshot {
   return snapshot;
 }
 
-/** Current access token for the API client, or null. */
 export function getAccessToken(): string | null {
   return accessToken;
 }
@@ -77,7 +67,6 @@ export function getStoredRefreshToken(): string | null {
   }
 }
 
-/** Stores a fresh token pair from login, MFA exchange or refresh. */
 export function applyTokens(tokens: AuthTokens): void {
   accessToken = tokens.accessToken;
   principal = tokens.principal;
@@ -86,13 +75,11 @@ export function applyTokens(tokens: AuthTokens): void {
   try {
     window.sessionStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
   } catch {
-    // Storage unavailable (private mode): the session still works
-    // in memory until the tab reloads.
+    // Storage unavailable: the session still works in memory.
   }
   emit();
 }
 
-/** Marks the restore attempt finished with no session. */
 export function markSignedOut(): void {
   accessToken = null;
   principal = null;
@@ -101,7 +88,6 @@ export function markSignedOut(): void {
   emit();
 }
 
-/** Clears every trace of the session locally. */
 export function clearSession(): void {
   try {
     window.sessionStorage.removeItem(REFRESH_TOKEN_KEY);
@@ -113,11 +99,6 @@ export function clearSession(): void {
 
 let expiring = false;
 
-/**
- * Session expiry path for 401 responses: drop the tokens and send
- * the browser to the login page. Guarded so a burst of parallel
- * 401s redirects once.
- */
 export function expireSession(): void {
   if (expiring) return;
   expiring = true;

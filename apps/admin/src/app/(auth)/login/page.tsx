@@ -2,210 +2,110 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { isMfaChallenge, type MfaChallenge } from '@dostelo/types';
-import { api, toUiError } from '../../../lib/api';
+import { AuthProvider } from '../../../components/auth-provider';
+import { ActionError, Field, TextInput } from '../../../components/ui';
+import { api, toUiError, type UiError } from '../../../lib/api';
 import { applyTokens } from '../../../lib/session';
+import { isMfaChallenge, type AdminLoginResult } from '../../../lib/types';
 
-/**
- * Admin sign in (Phase 4, chunk 2). Password login against the
- * API; when the account has MFA enabled the API answers with an
- * mfaRequired challenge instead of tokens, and this page shows
- * the TOTP step and completes the login through the MFA exchange.
- * Tokens land in the session store: access token in memory,
- * refresh token in sessionStorage (see src/lib/session.ts).
- */
-export default function LoginPage() {
+/* Staff sign in. Password login goes to POST /v1/auth/admin/login.
+   When the account has MFA enabled the API answers with a
+   challenge instead of tokens; the form then collects the
+   authenticator code and exchanges it. Errors are generic: the
+   page never reveals whether an account exists. */
+
+function LoginForm() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
+  const [challengeId, setChallengeId] = useState<string | null>(null);
   const [code, setCode] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<UiError | null>(null);
 
-  async function handlePasswordLogin(event: FormEvent): Promise<void> {
+  async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const result = await api.loginAdmin({ email, password });
+      if (challengeId) {
+        const tokens = await api.exchangeAdminMfa({ challengeId, code });
+        applyTokens(tokens);
+        router.replace('/dashboard');
+        return;
+      }
+      const result: AdminLoginResult = await api.loginAdmin({ email, password });
       if (isMfaChallenge(result)) {
-        setChallenge(result);
+        setChallengeId(result.challengeId);
         setBusy(false);
         return;
       }
       applyTokens(result);
       router.replace('/dashboard');
     } catch (caught) {
-      setError(toUiError(caught).message);
-      setBusy(false);
-    }
-  }
-
-  async function handleMfaExchange(event: FormEvent): Promise<void> {
-    event.preventDefault();
-    if (!challenge) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const tokens = await api.exchangeAdminMfa({
-        challengeId: challenge.challengeId,
-        code,
-      });
-      applyTokens(tokens);
-      router.replace('/dashboard');
-    } catch (caught) {
-      setError(toUiError(caught).message);
+      const uiError = toUiError(caught);
+      setError(
+        uiError.kind === 'api' || uiError.kind === 'forbidden'
+          ? { kind: 'api', message: 'Sign in failed. Check the email, password and code, then try again.' }
+          : uiError,
+      );
       setBusy(false);
     }
   }
 
   return (
-    <main
-      style={{
-        alignItems: 'center',
-        background:
-          'radial-gradient(900px 500px at 15% 10%, rgba(124, 92, 255, 0.45), transparent 60%), radial-gradient(800px 480px at 85% 90%, rgba(199, 80, 155, 0.28), transparent 60%), linear-gradient(135deg, #0d0a24 0%, #171238 48%, #241a52 100%)',
-        display: 'flex',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        padding: 24,
-      }}
-    >
-      <form
-        onSubmit={challenge ? handleMfaExchange : handlePasswordLogin}
-        style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--line)',
-          borderRadius: 20,
-          boxShadow: '0 24px 70px rgba(5, 3, 24, 0.5)',
-          maxWidth: 400,
-          padding: 36,
-          width: '100%',
-        }}
-      >
-        <div
-          aria-hidden="true"
-          style={{
-            alignItems: 'center',
-            background:
-              'linear-gradient(135deg, #7c5cff 0%, #a855f7 55%, #c7509b 100%)',
-            borderRadius: 14,
-            color: '#ffffff',
-            display: 'flex',
-            fontSize: 22,
-            fontWeight: 800,
-            height: 48,
-            justifyContent: 'center',
-            marginBottom: 16,
-            width: 48,
-          }}
-        >
-          D
+    <main style={{ display: 'flex', justifyContent: 'center', padding: '64px 16px' }}>
+      <form className="card" style={{ maxWidth: 400, width: '100%' }} onSubmit={submit}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <span className="sidebar-logo-mark">D</span>
+          <div>
+            <h1 style={{ fontSize: 20 }}>Dostelo Admin</h1>
+            <p className="note" style={{ margin: 0 }}>Staff only. Sign in with your admin account.</p>
+          </div>
         </div>
-        <div
-          style={{
-            color: 'var(--ink)',
-            fontSize: 22,
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-          }}
-        >
-          DOSTELO
-        </div>
-        <p style={{ color: 'var(--muted)', marginTop: 4 }}>
-          Admin Portal. Staff only, sign in to continue.
-        </p>
-
-        {challenge ? (
+        <ActionError error={error} />
+        {!challengeId ? (
           <>
-            <p style={{ fontSize: 14, lineHeight: 1.6, marginTop: 16 }}>
-              This account uses two-factor authentication. Enter the
-              six-digit code from your authenticator app.
-            </p>
-            <label className="field" htmlFor="code">
-              Authentication code
-            </label>
-            <input
-              id="code"
-              name="code"
-              className="input"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder="123456"
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              required
-            />
-            <button
-              type="submit"
-              className="btn"
-              style={{ marginTop: 24, width: '100%' }}
-              disabled={busy}
-            >
-              {busy ? 'Verifying...' : 'Verify and sign in'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ marginTop: 10, width: '100%' }}
-              disabled={busy}
-              onClick={() => {
-                setChallenge(null);
-                setCode('');
-                setError(null);
-              }}
-            >
-              Back
-            </button>
+            <Field label="Email">
+              <TextInput type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </Field>
+            <Field label="Password">
+              <TextInput type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            </Field>
           </>
         ) : (
           <>
-            <label className="field" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              className="input"
-              autoComplete="username"
-              placeholder="you@dostelo.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
-            <label className="field" htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              className="input"
-              autoComplete="current-password"
-              placeholder="Password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-            <button
-              type="submit"
-              className="btn"
-              style={{ marginTop: 24, width: '100%' }}
-              disabled={busy}
-            >
-              {busy ? 'Signing in...' : 'Sign in'}
-            </button>
+            <p className="note">
+              This account uses multi-factor authentication. Enter the six digit code from your
+              authenticator app. The challenge expires shortly; if it does, sign in again.
+            </p>
+            <Field label="Authenticator code">
+              <TextInput inputMode="numeric" required autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} />
+            </Field>
           </>
         )}
-
-        {error ? (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
+        <button type="submit" className="btn" style={{ width: '100%', justifyContent: 'center' }} disabled={busy}>
+          {busy ? 'Signing in...' : challengeId ? 'Verify and sign in' : 'Sign in'}
+        </button>
+        {challengeId ? (
+          <button
+            type="button"
+            className="btn secondary"
+            style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+            onClick={() => setChallengeId(null)}
+          >
+            Back to password sign in
+          </button>
         ) : null}
       </form>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <AuthProvider>
+      <LoginForm />
+    </AuthProvider>
   );
 }

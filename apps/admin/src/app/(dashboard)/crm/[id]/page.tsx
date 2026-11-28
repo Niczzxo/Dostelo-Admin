@@ -1,502 +1,143 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { use, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { Users } from 'lucide-react';
 import {
-  DELIVERY_ZONE_LABELS,
-  IDENTITY_STATUS_LABELS,
-  ORDER_STATUS_LABELS,
-} from '@dostelo/types';
-import {
-  api,
-  formatDateTime,
-  formatMinor,
-  formatMoney,
-  toUiError,
-} from '../../../../lib/api';
-import { useData } from '../../../../lib/use-data';
-import { expireSession } from '../../../../lib/session';
-import { useAuth } from '../../../../components/auth-provider';
-import {
-  Badge,
-  CardHead,
-  EmptyNote,
-  ErrorNote,
-  KpiCard,
-  LoadingNote,
-  ModuleHeader,
+  ActionError, Badge, Card, DataTable, ErrorNote, Field, KeyValues,
+  LoadingNote, ModuleHeader, StatusBadge, TextInput, Timeline,
 } from '../../../../components/ui';
-import {
-  MapPin,
-  NotebookPen,
-  ShoppingBag,
-  Tags,
-  UserRound,
-  Users,
-  Wallet,
-} from 'lucide-react';
+import { formatMinor } from '../../../../lib/api';
+import { useAction, useData } from '../../../../lib/use-data';
+import { asRec, itemsOf, num, str } from '../../../../lib/types';
 
-/**
- * The CRM timeline (Phase 5): the customer's orders, the visitor
- * activity linked to them through an authenticated or consented
- * flow (sessions, identity status, best lead score), staff notes
- * and tags. Nothing here is inferred from an IP or a fingerprint:
- * the visitor summary only ever aggregates sessions the linking
- * flows recorded against this customer.
- */
-
-function actionErrorMessage(caught: unknown): string | null {
-  const uiError = toUiError(caught);
-  if (uiError.kind === 'unauthorized') {
-    expireSession();
-    return null;
-  }
-  return uiError.message;
-}
-
-function NoteForm({
-  customerId,
-  onDone,
-}: {
-  customerId: string;
-  onDone: () => void;
-}) {
-  const [body, setBody] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(event: FormEvent): Promise<void> {
-    event.preventDefault();
-    if (!body.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api.addCustomerNote(customerId, { body: body.trim() });
-      setBody('');
-      onDone();
-    } catch (caught) {
-      setError(actionErrorMessage(caught));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} style={{ marginTop: 12 }}>
-      <label className="field" style={{ marginTop: 0 }}>
-        Add a note
-        <textarea
-          className="input"
-          rows={3}
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          placeholder="Recorded with your name and the time; notes are never edited"
-        />
-      </label>
-      <button type="submit" className="btn" disabled={busy || !body.trim()}>
-        {busy ? 'Saving...' : 'Add note'}
-      </button>
-      {error ? (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </form>
-  );
-}
-
-function TagManager({
-  customerId,
-  tags,
-  canEdit,
-  onDone,
-}: {
-  customerId: string;
-  tags: string[];
-  canEdit: boolean;
-  onDone: () => void;
-}) {
+/* Customer profile: GET /v1/crm/customers/:id/timeline returns the
+   customer, their orders, visitor summary, notes and tags. Notes
+   and tags are written through the CRM endpoints and re-read after
+   every change, so what is shown is what the API stored. */
+export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const detail = useData((c) => c.getCustomerTimeline(id), [id]);
+  const action = useAction();
+  const [note, setNote] = useState('');
   const [tag, setTag] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  async function add(event: FormEvent): Promise<void> {
+  const data = asRec(detail.data);
+  const customer = asRec(data.customer);
+  const visitor = asRec(data.visitor);
+  const orders = itemsOf(data.orders);
+  const notes = itemsOf(data.notes);
+  const tags = Array.isArray(data.tags) ? data.tags.map((t) => str(t)) : [];
+
+  async function addNote(event: FormEvent) {
     event.preventDefault();
-    if (!tag.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api.addCustomerTag(customerId, { tag: tag.trim() });
+    const ok = await action.run((c) => c.addCustomerNote(id, { body: note }));
+    if (ok) {
+      setNote('');
+      detail.reload();
+    }
+  }
+
+  async function addTag(event: FormEvent) {
+    event.preventDefault();
+    const ok = await action.run((c) => c.addCustomerTag(id, { tag }));
+    if (ok) {
       setTag('');
-      onDone();
-    } catch (caught) {
-      setError(actionErrorMessage(caught));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function remove(value: string): Promise<void> {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.removeCustomerTag(customerId, value);
-      onDone();
-    } catch (caught) {
-      setError(actionErrorMessage(caught));
-    } finally {
-      setBusy(false);
+      detail.reload();
     }
   }
 
   return (
-    <div>
-      {tags.length === 0 ? (
-        <EmptyNote>No tags on this customer.</EmptyNote>
-      ) : (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {tags.map((value) => (
-            <span key={value} className="badge">
-              {value}
-              {canEdit ? (
-                <button
-                  type="button"
-                  aria-label={`Remove tag ${value}`}
-                  disabled={busy}
-                  onClick={() => remove(value)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'inherit',
-                    cursor: 'pointer',
-                    marginLeft: 6,
-                    padding: 0,
-                  }}
-                >
-                  ×
-                </button>
-              ) : null}
-            </span>
-          ))}
-        </div>
-      )}
-      {canEdit ? (
-        <form
-          onSubmit={add}
-          style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'end' }}
-        >
-          <label className="field" style={{ marginTop: 0, flex: 1 }}>
-            New tag
-            <input
-              className="input"
-              value={tag}
-              onChange={(event) => setTag(event.target.value)}
-              placeholder="Letters, numbers, spaces and dashes"
-            />
-          </label>
-          <button type="submit" className="btn" disabled={busy || !tag.trim()}>
-            {busy ? 'Saving...' : 'Add tag'}
-          </button>
-        </form>
-      ) : (
-        <p className="note muted">
-          Your role cannot edit tags (the customers.edit permission
-          is required).
-        </p>
-      )}
-      {error ? (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-export default function CustomerProfilePage() {
-  const params = useParams<{ id: string }>();
-  const customerId = params.id;
-  const { session } = useAuth();
-  const canEdit =
-    session.principal?.permissions.includes('customers.edit') ?? false;
-
-  const profile = useData((client) => client.getCustomer(customerId), [
-    customerId,
-  ]);
-  const orders = useData(
-    (client) => client.listCustomerOrders(customerId),
-    [customerId],
-  );
-  const timeline = useData(
-    (client) => client.getCustomerTimeline(customerId),
-    [customerId],
-  );
-  const customer = profile.data;
-
-  return (
-    <section>
+    <>
       <ModuleHeader
         icon={Users}
-        title={customer ? customer.fullName : 'Customer'}
-        description="Customer profile, addresses, visitor activity linked through authenticated or consented flows, staff notes, tags and orders."
+        title={str(customer.name) || 'Customer'}
+        description="Customer profile, orders, visitor summary, notes and tags from the CRM timeline endpoint."
       >
-        <Link className="btn btn-secondary" href="/crm">
-          Back to customers
-        </Link>
+        <Link className="btn secondary" href="/crm">Back to customers</Link>
       </ModuleHeader>
-
-      {profile.loading ? <LoadingNote label="Loading profile..." /> : null}
-      {profile.error ? (
-        <ErrorNote error={profile.error} onRetry={profile.reload} />
-      ) : null}
-
-      {customer ? (
+      {detail.loading ? (
+        <LoadingNote />
+      ) : detail.error ? (
+        <ErrorNote error={detail.error} onRetry={detail.reload} />
+      ) : (
         <>
-          <div className="kpi-grid">
-            <KpiCard
-              icon={ShoppingBag}
-              label="Orders"
-              value={customer.orderCount.toLocaleString('en-US')}
-              note="Orders placed by this customer"
-              tone="blue"
+          <ActionError error={action.error} />
+          <Card title="Profile">
+            <KeyValues
+              entries={[
+                ['Customer ID', str(customer.id)],
+                ['Email', str(customer.email)],
+                ['Phone', str(customer.phone)],
+                ['Orders on timeline', String(orders.length)],
+                ['Visitor sessions', String(num(visitor.sessionCount))],
+                ['Visitor events', String(num(visitor.eventCount))],
+                ['Best lead score', String(num(visitor.bestLeadScore))],
+                ['Last activity', str(visitor.lastActivityAt)],
+              ]}
             />
-            <KpiCard
-              icon={Wallet}
-              label="Lifetime Value"
-              value={formatMinor(customer.lifetimeValueMinor)}
-              note="Total value of this customer's orders"
-              tone="green"
-            />
-            <KpiCard
-              icon={MapPin}
-              label="Saved Addresses"
-              value={customer.addresses.length.toLocaleString('en-US')}
-              note="Addresses saved on this profile"
-              tone="purple"
-            />
-            <KpiCard
-              icon={Tags}
-              label="Tags"
-              value={customer.tags.length.toLocaleString('en-US')}
-              note="Tags on this customer"
-              tone="orange"
-            />
-          </div>
-          <div className="detail-grid">
-            <div className="card">
-              <CardHead icon={UserRound} title="Profile" />
-              <dl className="kv">
-                <dt>Name</dt>
-                <dd>{customer.fullName}</dd>
-                <dt>Email</dt>
-                <dd>
-                  {customer.email ?? '-'}{' '}
-                  {customer.email
-                    ? customer.isEmailVerified
-                      ? '(verified)'
-                      : '(unverified)'
-                    : ''}
-                </dd>
-                <dt>Phone</dt>
-                <dd>
-                  {customer.phone}{' '}
-                  {customer.isPhoneVerified ? '(verified)' : '(unverified)'}
-                </dd>
-                <dt>Orders</dt>
-                <dd>{customer.orderCount}</dd>
-                <dt>Lifetime value</dt>
-                <dd>{formatMinor(customer.lifetimeValueMinor)}</dd>
-                <dt>Joined</dt>
-                <dd>{formatDateTime(customer.createdAt)}</dd>
-                <dt>Tags</dt>
-                <dd>
-                  {customer.tags.length > 0
-                    ? customer.tags.join(', ')
-                    : 'None'}
-                </dd>
-              </dl>
-            </div>
-            <div className="card">
-              <CardHead icon={MapPin} title="Addresses" />
-              {customer.addresses.length === 0 ? (
-                <EmptyNote>No saved addresses.</EmptyNote>
-              ) : (
-                customer.addresses.map((address) => (
-                  <div key={address.id} style={{ marginBottom: 14 }}>
-                    <div>
-                      <strong>{address.fullName}</strong>
-                      {address.isDefault ? (
-                        <>
-                          {' '}
-                          <Badge>Default</Badge>
-                        </>
-                      ) : null}
-                    </div>
-                    <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-                      {address.addressLine}
-                      {address.area ? `, ${address.area}` : ''},{' '}
-                      {address.city}, {address.district} (
-                      {DELIVERY_ZONE_LABELS[address.deliveryZone]})
-                      <br />
-                      {address.phone}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <h2 className="section-gap" style={{ fontSize: 18 }}>
-            Activity timeline
-          </h2>
-          {timeline.loading ? (
-            <LoadingNote label="Loading timeline..." />
-          ) : null}
-          {timeline.error ? (
-            <ErrorNote error={timeline.error} onRetry={timeline.reload} />
-          ) : null}
-          {timeline.data ? (
-            <>
-              <div className="detail-grid">
-                <div className="card">
-                  <CardHead icon={UserRound} title="Visitor activity" />
-                  <dl className="kv">
-                    <dt>Linked sessions</dt>
-                    <dd>{timeline.data.visitor.sessionCount}</dd>
-                    <dt>Identity status</dt>
-                    <dd>
-                      {timeline.data.visitor.identityStatuses.length > 0
-                        ? timeline.data.visitor.identityStatuses.map(
-                            (status) => (
-                              <span key={status} style={{ marginRight: 6 }}>
-                                <Badge>
-                                  {IDENTITY_STATUS_LABELS[status]}
-                                </Badge>
-                              </span>
-                            ),
-                          )
-                        : 'No linked sessions'}
-                    </dd>
-                    <dt>Tracked events</dt>
-                    <dd>{timeline.data.visitor.eventCount}</dd>
-                    <dt>Best lead score</dt>
-                    <dd>{timeline.data.visitor.bestLeadScore}</dd>
-                    <dt>Last activity</dt>
-                    <dd>
-                      {timeline.data.visitor.lastActivityAt
-                        ? formatDateTime(timeline.data.visitor.lastActivityAt)
-                        : 'None recorded'}
-                    </dd>
-                    <dt>Orders on timeline</dt>
-                    <dd>{timeline.data.orders.length}</dd>
-                  </dl>
-                  {Object.keys(timeline.data.visitor.eventCounts).length >
-                  0 ? (
-                    <ul className="timeline" style={{ marginTop: 12 }}>
-                      {Object.entries(timeline.data.visitor.eventCounts).map(
-                        ([type, count]) => (
-                          <li key={type}>
-                            <Badge>{type}</Badge> × {count}
-                          </li>
-                        ),
-                      )}
-                    </ul>
-                  ) : null}
-                </div>
-                <div className="card">
-                  <CardHead icon={Tags} title="Tags" />
-                  <TagManager
-                    customerId={customerId}
-                    tags={timeline.data.tags}
-                    canEdit={canEdit}
-                    onDone={() => {
-                      timeline.reload();
-                      profile.reload();
+            <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {tags.map((t) => (
+                <span key={t} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                  <Badge>{t}</Badge>
+                  <button
+                    type="button"
+                    className="btn secondary small"
+                    onClick={async () => {
+                      if (await action.run((c) => c.removeCustomerTag(id, t))) detail.reload();
                     }}
-                  />
-                </div>
-              </div>
-
-              <div className="card section-gap">
-                <CardHead icon={NotebookPen} title="Notes" />
-                {timeline.data.notes.length === 0 ? (
-                  <EmptyNote>No staff notes yet.</EmptyNote>
-                ) : (
-                  <ul className="timeline">
-                    {timeline.data.notes.map((note) => (
-                      <li key={note.id}>
-                        <div>{note.body}</div>
-                        <div className="when">
-                          {formatDateTime(note.createdAt)} · by{' '}
-                          {note.authorId}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {canEdit ? (
-                  <NoteForm
-                    customerId={customerId}
-                    onDone={timeline.reload}
-                  />
-                ) : (
-                  <p className="note muted">
-                    Your role cannot add notes (the customers.edit
-                    permission is required).
-                  </p>
-                )}
-              </div>
-            </>
-          ) : null}
-
-          <h2 className="section-gap" style={{ fontSize: 18 }}>
-            Orders
-          </h2>
-          {orders.loading ? <LoadingNote label="Loading orders..." /> : null}
-          {orders.error ? (
-            <ErrorNote error={orders.error} onRetry={orders.reload} />
-          ) : null}
-          {orders.data && orders.data.items.length === 0 ? (
-            <EmptyNote>This customer has not ordered yet.</EmptyNote>
-          ) : null}
-          {orders.data && orders.data.items.length > 0 ? (
-            <div className="card">
-            <CardHead icon={ShoppingBag} title="Customer orders" />
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Order</th>
-                    <th>Placed</th>
-                    <th>Status</th>
-                    <th>Payment</th>
-                    <th className="num">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.data.items.map((order) => (
-                    <tr key={order.id}>
-                      <td>
-                        <Link href={`/orders/${order.orderNumber}`}>
-                          {order.orderNumber}
-                        </Link>
-                      </td>
-                      <td>{formatDateTime(order.createdAt)}</td>
-                      <td>
-                        <Badge>{ORDER_STATUS_LABELS[order.status]}</Badge>
-                      </td>
-                      <td>{order.paymentStatus}</td>
-                      <td className="num">{formatMoney(order.total)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                  >
+                    Remove
+                  </button>
+                </span>
+              ))}
+              {tags.length === 0 ? <span className="note">No tags.</span> : null}
             </div>
-            </div>
-          ) : null}
+            <form onSubmit={addTag} style={{ marginTop: 12, display: 'flex', gap: 8, maxWidth: 420 }}>
+              <TextInput placeholder="New tag" value={tag} onChange={(e) => setTag(e.target.value)} required />
+              <button type="submit" className="btn secondary" disabled={action.busy}>Add tag</button>
+            </form>
+          </Card>
+
+          <Card title="Orders">
+            <DataTable
+              searchable={false}
+              emptyText="This customer has no orders on the timeline."
+              columns={[
+                { key: 'orderNumber', label: 'Order', render: (r) => <Link href={`/orders/${str(r.orderNumber)}`}>{str(r.orderNumber)}</Link> },
+                { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status} /> },
+                { key: 'total', label: 'Total', money: true },
+                { key: 'createdAt', label: 'Placed', date: true },
+              ]}
+              rows={orders}
+            />
+          </Card>
+
+          <div className="section-grid">
+            <Card title="Notes">
+              <Timeline items={notes.map((n) => ({ ...n, status: str(n.authorId ?? 'Staff note'), note: str(n.body ?? n.note) }))} />
+              <form onSubmit={addNote} style={{ marginTop: 10 }}>
+                <Field label="Add a note">
+                  <TextInput value={note} onChange={(e) => setNote(e.target.value)} required placeholder="What happened, what was agreed" />
+                </Field>
+                <button type="submit" className="btn" disabled={action.busy}>Save note</button>
+              </form>
+            </Card>
+            <Card title="Visitor summary">
+              <KeyValues
+                entries={[
+                  ['Identity statuses', (Array.isArray(visitor.identityStatuses) ? visitor.identityStatuses : []).map((s) => str(s)).join(', ') || 'None recorded'],
+                  ['Lifetime value (orders above)', formatMinor(orders.reduce((sum, o) => sum + num(asRec(o.total).amountMinor ?? o.totalMinor), 0))],
+                ]}
+              />
+              <p className="note">
+                Visitor figures come from the timeline endpoint. Anonymous activity is summarised
+                here only after the API linked it to this customer.
+              </p>
+            </Card>
+          </div>
         </>
-      ) : null}
-    </section>
+      )}
+    </>
   );
 }

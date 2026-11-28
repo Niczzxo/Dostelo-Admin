@@ -1,498 +1,135 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import {
-  CONTACT_ATTEMPT_RESULTS,
-  CONTACT_CHANNELS,
-  LEAD_STATUS_LABELS,
-  type ContactAttemptResult,
-  type ContactChannel,
-  type FollowUpTask,
-  type Lead,
-  type LeadContactAttempt,
-  type LeadStatus,
-} from '@dostelo/types';
-import { api, formatDateTime, toUiError } from '../../../lib/api';
-import { expireSession } from '../../../lib/session';
-import { useStaffDirectory } from '../../../lib/staff-directory';
-import { Badge, EmptyNote } from '../../../components/ui';
+import { ActionError, Field, SelectInput, TextInput } from '../../../components/ui';
+import { useAction } from '../../../lib/use-data';
+import type { StaffOption } from '../../../lib/staff-directory';
 
-/**
- * Legal next statuses, mirroring the API lead flow policy:
- * forward through the pipeline, back to Follow-up Required from
- * any active stage, or Lost from any active stage. Do Not Contact
- * is deliberately absent: it is reached only by recording an
- * opt-out. The API re-checks every move and stays the authority;
- * this list only decides which buttons render.
- */
-export const LEAD_NEXT: Record<LeadStatus, LeadStatus[]> = {
-  new: ['qualified', 'contacted', 'follow-up-required', 'lost'],
-  qualified: ['contacted', 'interested', 'follow-up-required', 'lost'],
-  contacted: [
-    'interested',
-    'follow-up-required',
-    'negotiation',
-    'converted',
-    'lost',
-  ],
-  interested: ['negotiation', 'follow-up-required', 'converted', 'lost'],
-  'follow-up-required': [
-    'contacted',
-    'interested',
-    'negotiation',
-    'converted',
-    'lost',
-  ],
-  negotiation: ['converted', 'follow-up-required', 'lost'],
-  converted: [],
-  lost: [],
-  'do-not-contact': [],
-};
+/* Lead action forms shared by the lead list and the lead detail
+   page: assign, status change, follow-up task and contact attempt.
+   Every form posts to the leads API and reports the API answer;
+   a contact attempt against a Do Not Contact lead is refused by
+   the API with 403 and that refusal is shown, never hidden. */
 
-export const LEAD_BASIS_LABELS: Record<string, string> = {
-  account: 'Account (visitor signed in)',
-  checkout: 'Checkout (details submitted at checkout)',
-  'contact-form': 'Contact form (details submitted on a form)',
-  'marketing-consent': 'Marketing consent granted',
-};
-
-export function useActionError(): [string | null, (caught: unknown) => void] {
-  const [error, setError] = useState<string | null>(null);
-  function handle(caught: unknown): void {
-    const uiError = toUiError(caught);
-    if (uiError.kind === 'unauthorized') {
-      expireSession();
-      return;
-    }
-    setError(uiError.message);
-  }
-  return [error, handle];
-}
-
-export function AssignForm({
-  lead,
+export function AssignLeadForm({
+  leadId,
+  staff,
   onDone,
 }: {
-  lead: Lead;
+  leadId: string;
+  staff: StaffOption[];
   onDone: () => void;
 }) {
+  const action = useAction();
   const [assigneeId, setAssigneeId] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, handleError] = useActionError();
-  const { staff, canRead } = useStaffDirectory();
-
-  async function submit(event: FormEvent): Promise<void> {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    const value = assigneeId.trim();
-    if (!value) return;
-    setBusy(true);
-    try {
-      await api.assignLead(lead.id, { assigneeId: value });
-      setAssigneeId('');
-      onDone();
-    } catch (caught) {
-      handleError(caught);
-    } finally {
-      setBusy(false);
-    }
+    if (await action.run((c) => c.assignLead(leadId, { assigneeId }))) onDone();
   }
-
   return (
     <form onSubmit={submit}>
-      <label className="field" style={{ marginTop: 0 }}>
-        Sales agent
-        {canRead && staff.length > 0 ? (
-          <select
-            className="select"
-            value={assigneeId}
-            onChange={(event) => setAssigneeId(event.target.value)}
-          >
-            <option value="">Select a sales agent</option>
-            {staff.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.displayName} ({member.email})
-              </option>
+      <ActionError error={action.error} />
+      <Field label="Assign to">
+        {staff.length > 0 ? (
+          <SelectInput required value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+            <option value="">Select a staff member</option>
+            {staff.map((s) => (
+              <option key={s.id} value={s.id}>{s.label}</option>
             ))}
-          </select>
+          </SelectInput>
         ) : (
-          <input
-            className="input"
-            value={assigneeId}
-            onChange={(event) => setAssigneeId(event.target.value)}
-            placeholder="Admin user id of the sales agent"
-          />
+          <TextInput required value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} placeholder="Staff ID from Staff Management" />
         )}
-      </label>
-      {canRead && staff.length > 0 ? null : (
-        <p className="note muted">
-          The staff directory is only readable with the staff.manage
-          permission, so the assignee is entered by admin id here.
-          The assignment is recorded in the audit log either way.
-        </p>
-      )}
-      {lead.assigneeId ? (
-        <p className="note muted">
-          Currently assigned to {lead.assigneeId}.
-        </p>
-      ) : null}
-      <button type="submit" className="btn" disabled={busy || !assigneeId.trim()}>
-        {busy ? 'Assigning...' : 'Assign lead'}
-      </button>
-      {error ? (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      ) : null}
+      </Field>
+      <button type="submit" className="btn" disabled={action.busy}>Assign lead</button>
     </form>
   );
 }
 
-export function StatusMoves({
-  lead,
-  onDone,
-}: {
-  lead: Lead;
-  onDone: () => void;
-}) {
-  const [busy, setBusy] = useState<LeadStatus | null>(null);
-  const [error, handleError] = useActionError();
-  const next = LEAD_NEXT[lead.status];
+const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'converted', 'lost', 'do-not-contact'];
 
-  async function move(to: LeadStatus): Promise<void> {
-    setBusy(to);
-    try {
-      await api.changeLeadStatus(lead.id, { status: to });
-      onDone();
-    } catch (caught) {
-      handleError(caught);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  if (next.length === 0) {
-    return (
-      <p className="note muted">
-        This lead is in a terminal status; no further pipeline
-        moves are available.
-      </p>
-    );
+export function LeadStatusForm({ leadId, current, onDone }: { leadId: string; current: string; onDone: () => void }) {
+  const action = useAction();
+  const [status, setStatus] = useState(current);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (await action.run((c) => c.changeLeadStatus(leadId, { status }))) onDone();
   }
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {next.map((to) => (
-          <button
-            key={to}
-            type="button"
-            className={to === 'lost' ? 'btn btn-danger' : 'btn'}
-            disabled={busy !== null}
-            onClick={() => move(to)}
-          >
-            {busy === to ? 'Moving...' : `Move to ${LEAD_STATUS_LABELS[to]}`}
-          </button>
-        ))}
-      </div>
-      {error ? (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </div>
+    <form onSubmit={submit}>
+      <ActionError error={action.error} />
+      <Field label="Status">
+        <SelectInput value={status} onChange={(e) => setStatus(e.target.value)}>
+          {LEAD_STATUSES.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </SelectInput>
+      </Field>
+      <button type="submit" className="btn" disabled={action.busy}>Save status</button>
+    </form>
   );
 }
 
-export function FollowUpSection({
-  lead,
-  tasks,
-  canEdit,
-  onDone,
-  defaultTitle,
-}: {
-  lead: Lead;
-  tasks: FollowUpTask[];
-  canEdit: boolean;
-  onDone: () => void;
-  defaultTitle?: string;
-}) {
-  const [title, setTitle] = useState(defaultTitle ?? '');
+export function FollowUpForm({ leadId, onDone }: { leadId: string; onDone: () => void }) {
+  const action = useAction();
+  const [title, setTitle] = useState('');
   const [dueAt, setDueAt] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [completing, setCompleting] = useState<string | null>(null);
-  const [error, handleError] = useActionError();
-
-  async function create(event: FormEvent): Promise<void> {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!title.trim()) return;
-    setBusy(true);
-    try {
-      await api.createFollowUpTask(lead.id, {
-        title: title.trim(),
-        dueAt: dueAt ? new Date(dueAt).toISOString() : undefined,
-      });
-      setTitle('');
-      setDueAt('');
-      onDone();
-    } catch (caught) {
-      handleError(caught);
-    } finally {
-      setBusy(false);
-    }
+    const dto: Record<string, unknown> = { title };
+    if (dueAt) dto.dueAt = new Date(dueAt).toISOString();
+    if (await action.run((c) => c.createFollowUpTask(leadId, dto))) onDone();
   }
-
-  async function complete(taskId: string): Promise<void> {
-    setCompleting(taskId);
-    try {
-      await api.completeFollowUpTask(lead.id, taskId);
-      onDone();
-    } catch (caught) {
-      handleError(caught);
-    } finally {
-      setCompleting(null);
-    }
-  }
-
   return (
-    <div>
-      {tasks.length === 0 ? (
-        <EmptyNote>No follow-up tasks yet.</EmptyNote>
-      ) : (
-        <ul className="timeline">
-          {tasks.map((task) => (
-            <li key={task.id}>
-              <div>
-                <strong>{task.title}</strong>{' '}
-                <Badge>{task.status}</Badge>
-              </div>
-              <div className="when">
-                {task.dueAt
-                  ? `Due ${formatDateTime(task.dueAt)} · `
-                  : ''}
-                Created {formatDateTime(task.createdAt)}
-                {task.completedAt
-                  ? ` · Completed ${formatDateTime(task.completedAt)}`
-                  : ''}
-              </div>
-              {canEdit && task.status === 'open' ? (
-                <button
-                  type="button"
-                  className="btn btn-small"
-                  style={{ marginTop: 6 }}
-                  disabled={completing !== null}
-                  onClick={() => complete(task.id)}
-                >
-                  {completing === task.id ? 'Completing...' : 'Mark complete'}
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
-      {canEdit ? (
-        <form onSubmit={create} style={{ marginTop: 12 }}>
-          <label className="field" style={{ marginTop: 0 }}>
-            New follow-up task
-            <input
-              className="input"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Call back about the running shoes"
-            />
-          </label>
-          <label className="field">
-            Due (optional)
-            <input
-              className="input"
-              type="datetime-local"
-              value={dueAt}
-              onChange={(event) => setDueAt(event.target.value)}
-            />
-          </label>
-          <button
-            type="submit"
-            className="btn"
-            disabled={busy || !title.trim()}
-          >
-            {busy ? 'Adding...' : 'Add task'}
-          </button>
-        </form>
-      ) : (
-        <p className="note muted">
-          Your role cannot manage follow-up tasks (the leads.edit
-          permission is required).
-        </p>
-      )}
-      {error ? (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </div>
+    <form onSubmit={submit}>
+      <ActionError error={action.error} />
+      <Field label="Task">
+        <TextInput required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Call back about the viewed product" />
+      </Field>
+      <Field label="Due (optional)">
+        <TextInput type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+      </Field>
+      <button type="submit" className="btn" disabled={action.busy}>Add follow-up</button>
+    </form>
   );
 }
 
-export function ContactSection({
-  lead,
-  attempts,
-  canContact,
-  onDone,
-  defaultChannel,
-  defaultPurpose,
-}: {
-  lead: Lead;
-  attempts: LeadContactAttempt[];
-  canContact: boolean;
-  onDone: () => void;
-  defaultChannel?: ContactChannel;
-  defaultPurpose?: string;
-}) {
-  const [channel, setChannel] = useState<ContactChannel>(defaultChannel ?? 'phone');
-  const [purpose, setPurpose] = useState(defaultPurpose ?? '');
-  const [result, setResult] = useState<ContactAttemptResult>('answered');
-  const [note, setNote] = useState('');
-  const [optOut, setOptOut] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, handleError] = useActionError();
-
-  const suppressed = lead.optedOut || lead.status === 'do-not-contact';
-
-  async function submit(event: FormEvent): Promise<void> {
+export function ContactAttemptForm({ leadId, onDone }: { leadId: string; onDone: () => void }) {
+  const action = useAction();
+  const [channel, setChannel] = useState('call');
+  const [result, setResult] = useState('');
+  const [purpose, setPurpose] = useState('');
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!purpose.trim()) return;
-    setBusy(true);
-    try {
-      await api.recordContactAttempt(lead.id, {
-        channel,
-        purpose: purpose.trim(),
-        result,
-        note: note.trim() ? note.trim() : undefined,
-        optOut: optOut || undefined,
-      });
-      setPurpose('');
-      setNote('');
-      setOptOut(false);
-      onDone();
-    } catch (caught) {
-      handleError(caught);
-    } finally {
-      setBusy(false);
-    }
+    const ok = await action.run((c) =>
+      c.recordContactAttempt(leadId, { channel, result, purpose }),
+    );
+    if (ok) onDone();
   }
-
   return (
-    <div>
-      {attempts.length === 0 ? (
-        <EmptyNote>No contact attempts recorded yet.</EmptyNote>
-      ) : (
-        <ul className="timeline">
-          {attempts.map((attempt) => (
-            <li key={attempt.id}>
-              <div>
-                <Badge>{attempt.channel}</Badge>{' '}
-                <strong>{attempt.result}</strong>
-                {attempt.optedOut ? (
-                  <>
-                    {' '}
-                    <Badge>Opt-out recorded</Badge>
-                  </>
-                ) : null}
-              </div>
-              <div>{attempt.purpose}</div>
-              {attempt.note ? <div>{attempt.note}</div> : null}
-              <div className="when">
-                {formatDateTime(attempt.createdAt)} · by {attempt.staffId}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {suppressed ? (
-        <p className="note error-note" role="alert">
-          This lead has opted out. Contact is disabled here, and
-          the API refuses any further attempt.
-        </p>
-      ) : canContact ? (
-        <form onSubmit={submit} style={{ marginTop: 12 }}>
-          <label className="field" style={{ marginTop: 0 }}>
-            Channel
-            <select
-              className="select"
-              value={channel}
-              onChange={(event) =>
-                setChannel(event.target.value as ContactChannel)
-              }
-            >
-              {CONTACT_CHANNELS.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Purpose
-            <input
-              className="input"
-              value={purpose}
-              onChange={(event) => setPurpose(event.target.value)}
-              placeholder="Why this contact is being made"
-            />
-          </label>
-          <label className="field">
-            Result
-            <select
-              className="select"
-              value={result}
-              onChange={(event) =>
-                setResult(event.target.value as ContactAttemptResult)
-              }
-            >
-              {CONTACT_ATTEMPT_RESULTS.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Note (optional)
-            <input
-              className="input"
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-            />
-          </label>
-          <label
-            className="field"
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
-          >
-            <input
-              type="checkbox"
-              checked={optOut}
-              onChange={(event) => setOptOut(event.target.checked)}
-            />
-            The lead asked not to be contacted again (records an opt-out)
-          </label>
-          <button
-            type="submit"
-            className="btn"
-            disabled={busy || !purpose.trim()}
-          >
-            {busy ? 'Recording...' : 'Record contact attempt'}
-          </button>
-        </form>
-      ) : (
-        <p className="note muted">
-          Your role cannot record contact attempts (the
-          leads.contact permission is required).
-        </p>
-      )}
-      {error ? (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </div>
+    <form onSubmit={submit}>
+      <ActionError error={action.error} />
+      <p className="note">
+        Attempts are recorded with staff, time, channel, purpose and result. If this lead is marked
+        Do Not Contact, the API refuses the attempt and the refusal is shown here.
+      </p>
+      <div className="form-grid">
+        <Field label="Channel">
+          <SelectInput value={channel} onChange={(e) => setChannel(e.target.value)}>
+            <option value="call">Call</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="email">Email</option>
+            <option value="sms">SMS</option>
+          </SelectInput>
+        </Field>
+        <Field label="Result">
+          <TextInput required value={result} onChange={(e) => setResult(e.target.value)} placeholder="Reached, no answer, asked to stop" />
+        </Field>
+      </div>
+      <Field label="Purpose">
+        <TextInput required value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Order help, cart follow-up, product question" />
+      </Field>
+      <button type="submit" className="btn" disabled={action.busy}>Record attempt</button>
+    </form>
   );
 }

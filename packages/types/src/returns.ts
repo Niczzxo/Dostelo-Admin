@@ -207,6 +207,11 @@ export interface ReturnRequest {
    * back into sellable stock through an audited adjustment.
    * Received goods never restock before inspection. */
   restocked: boolean;
+  /** Replacement order created for an approved exchange, when
+   * one is created. The current flow ends exchanges at
+   * exchange-processing, so this stays null today; the field is
+   * part of the customer-facing contract the storefront reads. */
+  replacementOrderId?: string | null;
   createdById: string | null;
   decidedById: string | null;
   createdAt: string;

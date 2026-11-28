@@ -1,15 +1,11 @@
 import type { Config } from 'tailwindcss';
 
-/* Dostelo admin Tailwind configuration.
-   Same shared approach as the storefront: Tailwind CSS v3.4.19
-   through PostCSS, explicit content list, preflight disabled so
-   the existing hand-written CSS in src/app/globals.css keeps its
-   exact cascade and the current look does not change.
-   Every theme value below resolves to an existing CSS variable:
-   the Dostelo design tokens from @dostelo/design-tokens
-   (tokens.css), which the admin globals.css already uses. The
-   font stack is the admin body stack from globals.css verbatim.
-   No colour, radius, shadow or font value is hard-coded here. */
+/* Dostelo admin Tailwind configuration, fresh rebuild 2026-11-28.
+   Every theme value resolves to a CSS variable defined in
+   src/app/globals.css from the Dostelo storefront colour system:
+   Off-white #F4F2ED, Warm Black #1C1B17 and their tints and shades.
+   Preflight stays disabled so the hand-written component classes in
+   globals.css keep their exact cascade, as in the previous build. */
 const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
   corePlugins: {
@@ -31,6 +27,10 @@ const config: Config = {
         'on-dark': 'var(--on-dark)',
         'on-dark-mut': 'var(--on-dark-mut)',
         chip: 'var(--chip)',
+        accent: 'var(--accent)',
+        ok: 'var(--ok)',
+        warn: 'var(--warn)',
+        bad: 'var(--bad)',
       },
       borderRadius: {
         lg: 'var(--r-lg)',
@@ -38,13 +38,7 @@ const config: Config = {
         sm: 'var(--r-sm)',
       },
       fontFamily: {
-        sans: [
-          'system-ui',
-          '-apple-system',
-          '"Segoe UI"',
-          'Roboto',
-          'sans-serif',
-        ],
+        sans: ['system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'],
       },
       boxShadow: {
         token: 'var(--shadow)',

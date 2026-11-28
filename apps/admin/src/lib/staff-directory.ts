@@ -1,27 +1,21 @@
-'use client';
+import type { Rec } from './types';
+import { itemsOf, str } from './types';
 
-import type { StaffMemberView } from '@dostelo/types';
-import { useAuth } from '../components/auth-provider';
-import { useData } from './use-data';
+/* Staff directory helpers, fresh rebuild 2026-11-28. Assignment
+   dropdowns are built only from the staff list the API returned;
+   when the list is empty the forms fall back to a free text staff
+   id field, so no name is ever invented. */
 
-/**
- * The staff directory for assignment pickers (leads, support,
- * returns inspection, follow-ups). Only roles holding
- * staff.manage can read the directory endpoint; for everyone
- * else this returns an empty list and the pickers fall back to
- * free-text or unassigned states, exactly as the API enforces.
- */
-export function useStaffDirectory(): {
-  staff: StaffMemberView[];
-  canRead: boolean;
-} {
-  const { session } = useAuth();
-  const canRead =
-    session.principal?.permissions.includes('staff.manage') ?? false;
-  const { data } = useData(
-    (client) =>
-      canRead ? client.listStaff() : Promise.resolve({ items: [] }),
-    [canRead],
-  );
-  return { staff: data?.items ?? [], canRead };
+export interface StaffOption {
+  id: string;
+  label: string;
+}
+
+export function staffOptions(staffResponse: unknown): StaffOption[] {
+  return itemsOf(staffResponse)
+    .map((member: Rec) => ({
+      id: str(member.id ?? member.userId),
+      label: str(member.name ?? member.email ?? member.id),
+    }))
+    .filter((option) => option.id !== '');
 }

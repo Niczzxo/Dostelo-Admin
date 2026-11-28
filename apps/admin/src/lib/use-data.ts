@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DosteloApiClient } from '@dostelo/api-client';
 import { api, toUiError, type UiError } from './api';
 import { expireSession } from './session';
 
@@ -12,16 +11,13 @@ export interface DataState<T> {
   reload: () => void;
 }
 
-/**
- * Loads data from the API for a page or widget, with the portal's
- * shared error handling: a 401 expires the session and redirects
- * to login, a 403 and an unreachable API surface as a UiError the
- * page renders in place, and nothing here ever throws into a
- * component. Each widget uses its own useData so one failing read
- * does not blank the whole page.
- */
+/* Loads data from the API with the portal shared error handling:
+   a 401 expires the session and redirects to login, a 403 and an
+   unreachable API surface as a UiError the page renders in place,
+   and nothing here throws into a component. Each widget uses its
+   own useData so one failing read does not blank the whole page. */
 export function useData<T>(
-  fetcher: (client: DosteloApiClient) => Promise<T>,
+  fetcher: (client: typeof api) => Promise<T>,
   deps: unknown[] = [],
 ): DataState<T> {
   const [data, setData] = useState<T | null>(null);
@@ -63,4 +59,33 @@ export function useData<T>(
   }, [generation, ...deps]);
 
   return { data, error, loading, reload };
+}
+
+/** Runs a mutation, reports its error as a UiError, and returns
+ * true only when the API confirmed the change. */
+export function useAction(): {
+  busy: boolean;
+  error: UiError | null;
+  run: (fn: (client: typeof api) => Promise<unknown>) => Promise<boolean>;
+  clear: () => void;
+} {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<UiError | null>(null);
+  const run = useCallback(async (fn: (client: typeof api) => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn(api);
+      setBusy(false);
+      return true;
+    } catch (caught) {
+      const uiError = toUiError(caught);
+      if (uiError.kind === 'unauthorized') expireSession();
+      setError(uiError);
+      setBusy(false);
+      return false;
+    }
+  }, []);
+  const clear = useCallback(() => setError(null), []);
+  return { busy, error, run, clear };
 }
