@@ -1,44 +1,46 @@
-'use client';
-
-import { use } from 'react';
-import Link from 'next/link';
-import { LayoutDashboard } from 'lucide-react';
-import { Card, ModuleHeader } from '../../../components/ui';
-import { MODULE_ICONS } from '../../../components/sidebar';
+import { notFound } from 'next/navigation';
 import { moduleBySlug } from '../../../lib/modules';
+import { Badge, PageHeader } from '../../../components/ui';
 
-/* Catch-all for module slugs in the registry that have no dedicated
-   route file. Every one of the 25 modules has a dedicated page in
-   this rebuild, so this renders only for unknown paths under the
-   dashboard group: it shows the module purpose from the registry
-   when the slug matches one, and a plain not-found note otherwise.
-   It never renders fake module data. */
-export default function ModuleCatchAllPage({
+/**
+ * Structure page for modules that are part of the admin master
+ * structure but not yet built: the module name, its purpose and
+ * the roadmap phase that builds it. Nothing here pretends to be a
+ * working feature. Functional modules have their own routes,
+ * which take precedence over this catch-all.
+ */
+export default async function ModuleStructurePage({
   params,
 }: {
   params: Promise<{ module: string[] }>;
 }) {
-  const { module } = use(params);
-  const slug = module.join('/');
-  const found = moduleBySlug(slug);
-  const Icon = found ? (MODULE_ICONS[found.slug] ?? LayoutDashboard) : LayoutDashboard;
+  const segments = (await params).module;
+  if (segments.length !== 1) notFound();
+  const slug = segments[0] as string;
+  const module_ = moduleBySlug(slug);
+  if (!module_ || module_.functional) notFound();
 
   return (
-    <>
-      <ModuleHeader
-        icon={Icon}
-        title={found ? found.label : 'Page not found'}
-        description={found ? found.purpose : undefined}
-      >
-        <Link className="btn secondary" href="/dashboard">Back to dashboard</Link>
-      </ModuleHeader>
-      <Card>
-        <p className="note" style={{ margin: 0 }}>
-          {found
-            ? `${found.label} is part of the portal structure (${found.phase}). Its dedicated page is linked in the sidebar; this address is not its route.`
-            : 'This address does not match any of the 25 admin modules. Use the sidebar to navigate.'}
-        </p>
-      </Card>
-    </>
+    <section>
+      <PageHeader title={module_.label}>
+        <Badge>Structure only</Badge>
+      </PageHeader>
+      <div className="card" style={{ maxWidth: 720 }}>
+        <dl className="kv">
+          <dt>Purpose</dt>
+          <dd>{module_.purpose}</dd>
+          <dt>Roadmap phase</dt>
+          <dd>{module_.phase}</dd>
+          <dt>View permission</dt>
+          <dd>{module_.permission}</dd>
+          <dt>Status</dt>
+          <dd>
+            Not yet implemented. This page exists so the portal
+            structure matches the admin master structure while the
+            module is scheduled.
+          </dd>
+        </dl>
+      </div>
+    </section>
   );
 }

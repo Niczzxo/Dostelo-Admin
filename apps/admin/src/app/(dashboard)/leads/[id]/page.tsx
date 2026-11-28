@@ -1,144 +1,211 @@
 'use client';
 
-import { use } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { Target } from 'lucide-react';
+import { useParams } from 'next/navigation';
+import { LEAD_STATUS_LABELS, type Lead } from '@dostelo/types';
+import { api, formatDateTime } from '../../../../lib/api';
+import { useData } from '../../../../lib/use-data';
+import { useAuth } from '../../../../components/auth-provider';
 import {
-  ActionError, Badge, Card, DataTable, ErrorNote, KeyValues, LoadingNote,
-  ModuleHeader,
+  Badge,
+  CardHead,
+  ErrorNote,
+  LoadingNote,
 } from '../../../../components/ui';
-import { staffOptions } from '../../../../lib/staff-directory';
-import { useAction, useData } from '../../../../lib/use-data';
-import { asRec, itemsOf, str } from '../../../../lib/types';
 import {
-  AssignLeadForm, ContactAttemptForm, FollowUpForm, LeadStatusForm,
+  AssignForm,
+  ContactSection,
+  FollowUpSection,
+  LEAD_BASIS_LABELS,
+  StatusMoves,
+  useActionError,
 } from '../lead-actions';
 
-/* Lead detail: GET /v1/leads/:id returns the lead, its contact
-   attempts and its follow-up tasks. All four action forms post to
-   the leads API. Opt out is a first-class action here and in the
-   API; once set, contact attempts are refused. */
-export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const detail = useData((c) => c.getLead(id), [id]);
-  const staff = useData((c) => c.listStaff());
-  const action = useAction();
+export default function LeadDetailPage() {
+  const params = useParams<{ id: string }>();
+  const leadId = params.id;
+  const { session } = useAuth();
+  const permissions = session.principal?.permissions ?? [];
+  const canAssign = permissions.includes('leads.assign');
+  const canEdit = permissions.includes('leads.edit');
+  const canContact = permissions.includes('leads.contact');
 
-  const data = asRec(detail.data);
-  const lead = asRec(data.lead ?? detail.data);
-  const attempts = itemsOf(data.attempts ?? data.contactAttempts);
-  const tasks = itemsOf(data.followUpTasks ?? data.followUps);
-  const dnc = str(lead.status) === 'do-not-contact' || lead.doNotContact === true;
+  const detail = useData((client) => client.getLead(leadId), [leadId]);
+  const lead: Lead | undefined = detail.data?.lead;
+  const [optingOut, setOptingOut] = useState(false);
+  const [optOutError, handleOptOutError] = useActionError();
 
-  function done() {
-    detail.reload();
+  async function recordOptOut(): Promise<void> {
+    if (!lead) return;
+    const confirmed = window.confirm(
+      'Record an opt-out for this lead? The lead moves to Do Not Contact and all further contact is refused.',
+    );
+    if (!confirmed) return;
+    setOptingOut(true);
+    try {
+      await api.optOutLead(lead.id);
+      detail.reload();
+    } catch (caught) {
+      handleOptOutError(caught);
+    } finally {
+      setOptingOut(false);
+    }
   }
 
+  const suppressed =
+    lead !== undefined &&
+    (lead.optedOut || lead.status === 'do-not-contact');
+
   return (
-    <>
-      <ModuleHeader
-        icon={Target}
-        title={str(lead.name) || 'Lead'}
-        description="Lead record, contact history and follow-up tasks from the API."
-      >
-        <Link className="btn secondary" href="/leads">Back to leads</Link>
-        {!dnc ? (
-          <button
-            type="button"
-            className="btn danger"
-            disabled={action.busy}
-            onClick={async () => {
-              if (await action.run((c) => c.optOutLead(id))) done();
-            }}
-          >
-            Mark Do Not Contact
-          </button>
-        ) : null}
-      </ModuleHeader>
-      {detail.loading ? (
-        <LoadingNote />
-      ) : detail.error ? (
-        <ErrorNote error={detail.error} onRetry={detail.reload} />
-      ) : (
-        <>
-          <ActionError error={action.error} />
-          <Card title="Lead">
-            <KeyValues
-              entries={[
-                ['Lead ID', str(lead.id)],
-                ['Phone', str(lead.phone)],
-                ['Email', str(lead.email)],
-                ['Source', str(lead.source)],
-                ['Status', dnc ? <Badge key="s" tone="bad">Do Not Contact</Badge> : <Badge key="s">{str(lead.status)}</Badge>],
-                ['Score', String(lead.score ?? lead.leadScore ?? '')],
-                ['Assignee', str(lead.assigneeId) || 'Unassigned'],
-                ['Created', str(lead.createdAt)],
-              ]}
-            />
-          </Card>
-          <div className="section-grid">
-            <Card title="Assign">
-              <AssignLeadForm leadId={id} staff={staffOptions(staff.data)} onDone={done} />
-            </Card>
-            <Card title="Status">
-              <LeadStatusForm leadId={id} current={str(lead.status)} onDone={done} />
-            </Card>
-            <Card title="Follow-up task">
-              <FollowUpForm leadId={id} onDone={done} />
-            </Card>
-            <Card title="Contact attempt">
-              {dnc ? (
-                <p className="note">
-                  This lead is Do Not Contact. Contact attempts are refused by the API and are not
-                  offered here.
-                </p>
-              ) : (
-                <ContactAttemptForm leadId={id} onDone={done} />
-              )}
-            </Card>
+    <section>
+      <div className="module-head">
+        <div className="module-head-main">
+          <div>
+            <h1>{lead ? (lead.fullName ?? 'Lead detail') : 'Lead detail'}</h1>
+            <p className="module-desc">
+              Assignment, pipeline moves, follow-up tasks and contact attempts for this lead.
+            </p>
           </div>
-          <Card title="Follow-up tasks">
-            <DataTable
-              searchable={false}
-              emptyText="No follow-up tasks yet."
-              columns={[
-                { key: 'title', label: 'Task' },
-                { key: 'dueAt', label: 'Due', date: true },
-                { key: 'status', label: 'State', render: (r) => <Badge>{str(r.status ?? (r.completedAt ? 'complete' : 'open'))}</Badge> },
-                {
-                  key: 'id', label: 'Action',
-                  render: (r) => (
-                    <button
-                      type="button"
-                      className="btn secondary small"
-                      onClick={async () => {
-                        if (await action.run((c) => c.completeFollowUpTask(id, str(r.id)))) done();
-                      }}
-                    >
-                      Complete
-                    </button>
-                  ),
-                },
-              ]}
-              rows={tasks}
-            />
-          </Card>
-          <Card title="Contact attempts">
-            <DataTable
-              searchable={false}
-              emptyText="No contact attempts recorded."
-              columns={[
-                { key: 'channel', label: 'Channel' },
-                { key: 'purpose', label: 'Purpose' },
-                { key: 'result', label: 'Result' },
-                { key: 'staffId', label: 'Staff' },
-                { key: 'createdAt', label: 'When', date: true },
-              ]}
-              rows={attempts}
-            />
-          </Card>
+        </div>
+        <div className="module-head-actions">
+          <Link className="btn btn-secondary" href="/leads">
+            Back to leads
+          </Link>
+        </div>
+      </div>
+
+      {detail.loading ? <LoadingNote label="Loading lead..." /> : null}
+      {detail.error ? (
+        <ErrorNote error={detail.error} onRetry={detail.reload} />
+      ) : null}
+
+      {lead ? (
+        <>
+          {suppressed ? (
+            <p className="note error-note" role="alert">
+              Do not contact. This lead opted out
+              {lead.optedOutAt
+                ? ` on ${formatDateTime(lead.optedOutAt)}`
+                : ''}
+              . Contact actions are disabled and the API refuses
+              further attempts.
+            </p>
+          ) : null}
+
+          <div className="detail-grid">
+            <div className="card">
+              <CardHead title="Lead" />
+              <dl className="kv">
+                <dt>Status</dt>
+                <dd>
+                  <Badge>{LEAD_STATUS_LABELS[lead.status]}</Badge>
+                </dd>
+                <dt>Name</dt>
+                <dd>{lead.fullName ?? 'Not recorded'}</dd>
+                <dt>Email</dt>
+                <dd>{lead.email ?? 'Not recorded'}</dd>
+                <dt>Phone</dt>
+                <dd>{lead.phone ?? 'Not recorded'}</dd>
+                <dt>Contact basis</dt>
+                <dd>
+                  {lead.contactBasis
+                    ? (LEAD_BASIS_LABELS[lead.contactBasis] ?? lead.contactBasis)
+                    : 'None recorded: this lead is not contactable'}
+                </dd>
+                <dt>Source</dt>
+                <dd>{lead.source}</dd>
+                <dt>Lead score</dt>
+                <dd>{lead.score ?? 'Not scored'}</dd>
+                <dt>Assigned to</dt>
+                <dd>{lead.assigneeId ?? 'Unassigned'}</dd>
+                <dt>Customer</dt>
+                <dd>
+                  {lead.customerId ? (
+                    <Link href={`/crm/${lead.customerId}`}>
+                      View CRM profile
+                    </Link>
+                  ) : (
+                    'Not linked'
+                  )}
+                </dd>
+                <dt>Created</dt>
+                <dd>{formatDateTime(lead.createdAt)}</dd>
+                <dt>Updated</dt>
+                <dd>{formatDateTime(lead.updatedAt)}</dd>
+                {lead.note ? (
+                  <>
+                    <dt>Note</dt>
+                    <dd>{lead.note}</dd>
+                  </>
+                ) : null}
+              </dl>
+            </div>
+
+            <div className="card">
+              <CardHead title="Pipeline" />
+              {canEdit ? (
+                <StatusMoves lead={lead} onDone={detail.reload} />
+              ) : (
+                <p className="note muted">
+                  Your role cannot move leads (the leads.edit
+                  permission is required).
+                </p>
+              )}
+              {!suppressed && canEdit ? (
+                <div style={{ marginTop: 16 }}>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    disabled={optingOut}
+                    onClick={recordOptOut}
+                  >
+                    {optingOut ? 'Recording...' : 'Record opt-out'}
+                  </button>
+                  {optOutError ? (
+                    <p className="form-error" role="alert">
+                      {optOutError}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="card">
+              <CardHead title="Assignment" />
+              {canAssign ? (
+                <AssignForm lead={lead} onDone={detail.reload} />
+              ) : (
+                <p className="note muted">
+                  Your role cannot assign leads (the leads.assign
+                  permission is required).
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="detail-grid section-gap">
+            <div className="card">
+              <CardHead title="Follow-up tasks" />
+              <FollowUpSection
+                lead={lead}
+                tasks={detail.data?.followUpTasks ?? []}
+                canEdit={canEdit}
+                onDone={detail.reload}
+              />
+            </div>
+            <div className="card">
+              <CardHead title="Contact attempts" />
+              <ContactSection
+                lead={lead}
+                attempts={detail.data?.attempts ?? []}
+                canContact={canContact}
+                onDone={detail.reload}
+              />
+            </div>
+          </div>
         </>
-      )}
-    </>
+      ) : null}
+    </section>
   );
 }

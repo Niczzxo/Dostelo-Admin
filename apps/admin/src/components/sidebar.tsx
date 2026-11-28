@@ -3,20 +3,42 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  BarChart3, Bell, Blocks, ChevronLeft, ChevronRight, ClipboardList,
-  CreditCard, Crown, Database, Globe, LayoutDashboard, LifeBuoy,
-  Megaphone, MessageSquare, RotateCcw, Scale, ShieldCheck, ShoppingBag,
-  ShoppingCart, Star, Target, Truck, Users, UserSearch, UsersRound,
-  Warehouse, Zap, type LucideIcon,
+  BarChart3,
+  Bell,
+  Blocks,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  CreditCard,
+  Crown,
+  Database,
+  Globe,
+  LayoutDashboard,
+  LifeBuoy,
+  Megaphone,
+  MessageSquare,
+  RotateCcw,
+  Scale,
+  ShieldCheck,
+  ShoppingBag,
+  ShoppingCart,
+  Star,
+  Target,
+  Truck,
+  Users,
+  UserSearch,
+  UsersRound,
+  Warehouse,
+  Zap,
+  type LucideIcon,
 } from 'lucide-react';
 import { ADMIN_MODULES } from '../lib/modules';
 import { useData } from '../lib/use-data';
-import { num } from '../lib/types';
 import { useAuth } from './auth-provider';
 
-/* One Lucide icon per module, keyed by the module slug from the
-   sidebar registry. The registry stays the single source of module
-   order, labels and permissions. */
+/** One Lucide icon per module, keyed by the module slug from the
+ * sidebar registry. The registry itself stays the single source
+ * of module order, labels and permissions. */
 export const MODULE_ICONS: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
   'buyer-intelligence': UserSearch,
@@ -45,89 +67,104 @@ export const MODULE_ICONS: Record<string, LucideIcon> = {
   backup: Database,
 };
 
-/* The sidebar: Warm Black with off-white text and the red brand
-   mark, the 25 modules in registry order, and real badges only:
-   the notifications unread count from the API, and a dot when the
-   communication log holds failed or not-configured entries.
-   Items whose view permission the signed-in role does not hold
-   are hidden; the API enforces the same permissions server-side. */
+/**
+ * The redesigned sidebar: dark navy with a subtle purple
+ * gradient, the DOSTELO Admin Portal brand block, the 25 modules
+ * in registry order with Lucide icons, a purple gradient pill for
+ * the active module, and real badges (the notifications unread
+ * count and a dot when the communication log holds failed or
+ * not-configured entries). Items whose view permission the
+ * signed-in role does not hold are hidden; the API enforces the
+ * same permissions server-side.
+ */
 export default function Sidebar({
   collapsed,
-  open,
   onToggleCollapsed,
   onNavigate,
 }: {
   collapsed: boolean;
-  open: boolean;
   onToggleCollapsed: () => void;
   onNavigate: () => void;
 }) {
   const { session } = useAuth();
   const pathname = usePathname();
   const permissions = session.principal?.permissions ?? [];
-  const visible = ADMIN_MODULES.filter((item) => permissions.includes(item.permission));
+  const visible = ADMIN_MODULES.filter((item) =>
+    permissions.includes(item.permission),
+  );
 
   const canNotifications = permissions.includes('settings.manage');
   const feed = useData(
-    (client) => (canNotifications ? client.getNotificationFeed() : Promise.resolve(null)),
+    (client) =>
+      canNotifications
+        ? client.getNotificationFeed()
+        : Promise.resolve(null),
     [canNotifications],
   );
-  const unread = feed.data ? num(feed.data.unread) : 0;
+  const unread = feed.data?.unread ?? 0;
 
   const canCommunications = permissions.includes('communications.read');
   const commLog = useData(
-    (client) => (canCommunications ? client.listCommunicationLog({}) : Promise.resolve(null)),
+    (client) =>
+      canCommunications
+        ? client.listCommunicationLog({})
+        : Promise.resolve(null),
     [canCommunications],
   );
-  const commNeedsAttention = commLog.data
-    ? (Array.isArray(commLog.data.items) ? commLog.data.items : []).some(
-        (entry) =>
-          entry && typeof entry === 'object' &&
-          ((entry as { status?: string }).status === 'failed' ||
-            (entry as { status?: string }).status === 'not-configured'),
-      )
-    : false;
+  const commNeedsAttention =
+    commLog.data?.items.some(
+      (entry) => entry.status === 'failed' || entry.status === 'not-configured',
+    ) ?? false;
 
   return (
-    <aside className={`sidebar${collapsed ? ' collapsed' : ''}${open ? ' open' : ''}`}>
+    <aside className="sidebar">
       <div className="sidebar-brand">
         <span className="sidebar-logo-mark">D</span>
-        {!collapsed ? (
-          <span>
-            <span className="sidebar-brand-name">DOSTELO</span>
-            <br />
-            <span className="sidebar-brand-sub">Admin Portal</span>
+        <span className="sidebar-brand-text">
+          <span className="sidebar-logo">DOSTELO</span>
+          <span className="sidebar-sub" style={{ display: 'block' }}>
+            Admin Portal
           </span>
-        ) : null}
+        </span>
+        <button
+          type="button"
+          className="sidebar-collapse"
+          onClick={onToggleCollapsed}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
       </div>
-      <nav className="sidebar-nav" aria-label="Admin modules">
-        {visible.map((item) => {
-          const Icon = MODULE_ICONS[item.slug] ?? LayoutDashboard;
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          return (
-            <Link
-              key={item.slug}
-              href={item.href}
-              className={active ? 'sidebar-link active' : 'sidebar-link'}
-              onClick={onNavigate}
-              title={collapsed ? item.label : undefined}
-            >
-              <Icon size={18} strokeWidth={1.9} />
-              {!collapsed ? <span>{item.label}</span> : null}
-              {!collapsed && item.slug === 'notifications' && unread > 0 ? (
-                <span className="sidebar-badge">{unread}</span>
-              ) : null}
-              {!collapsed && item.slug === 'communication' && commNeedsAttention ? (
-                <span className="sidebar-dot" aria-label="Needs attention" />
-              ) : null}
-            </Link>
-          );
-        })}
+      <nav>
+        <ul className="sidebar-list">
+          {visible.map((item) => {
+            const active =
+              pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const Icon = MODULE_ICONS[item.slug] ?? LayoutDashboard;
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className={active ? 'sidebar-link active' : 'sidebar-link'}
+                  onClick={onNavigate}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <span className="sidebar-link-icon">
+                    <Icon size={19} strokeWidth={1.9} />
+                  </span>
+                  <span className="sidebar-link-label">{item.label}</span>
+                  {item.slug === 'notifications' && unread > 0 ? (
+                    <span className="sidebar-badge">{unread}</span>
+                  ) : null}
+                  {item.slug === 'communication' && commNeedsAttention ? (
+                    <span className="sidebar-dot" aria-label="Needs attention" />
+                  ) : null}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </nav>
-      <button type="button" className="sidebar-toggle" onClick={onToggleCollapsed}>
-        {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        {!collapsed ? <span>Collapse</span> : null}
-      </button>
     </aside>
   );
 }

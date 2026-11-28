@@ -1,85 +1,144 @@
 'use client';
 
 import { Suspense, useState, type FormEvent } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ActionError, Field, TextInput } from '../../../components/ui';
-import { api, toUiError, type UiError } from '../../../lib/api';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { KeyRound } from 'lucide-react';
+import { api, toUiError } from '../../../lib/api';
 
-/* Accept a staff invite: the invite token arrives in the link, the
-   invitee sets their own password here, and the API creates the
-   active staff account. The password is sent only to the API; it
-   is never stored by this page. */
-
+/**
+ * Staff invitation acceptance. An inviting admin hands the
+ * invitee this link with its one-time token; setting a password
+ * here activates the account. The token is single-use and
+ * expires 72 hours after the invite was created; nothing was
+ * emailed, because no email provider is configured. The API
+ * validates the token and the password rules server-side.
+ */
 function AcceptInviteForm() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const token = params.get('token') ?? '';
-  const [name, setName] = useState('');
+  const searchParams = useSearchParams();
+  const token = searchParams.get('token') ?? '';
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<UiError | null>(null);
   const [done, setDone] = useState(false);
 
-  async function submit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent): Promise<void> {
     event.preventDefault();
+    setError(null);
+    if (!token) {
+      setError('This invite link is missing its token. Ask the inviting admin for the full link.');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Choose a password of at least 8 characters.');
+      return;
+    }
     if (password !== confirm) {
-      setError({ kind: 'api', message: 'The two passwords do not match.' });
+      setError('The two passwords do not match.');
       return;
     }
     setBusy(true);
-    setError(null);
     try {
-      await api.acceptStaffInvite({ token, name, password });
+      await api.acceptStaffInvite({ token, password });
       setDone(true);
     } catch (caught) {
-      setError(toUiError(caught));
+      setError(toUiError(caught).message);
       setBusy(false);
     }
   }
 
   return (
-    <main style={{ display: 'flex', justifyContent: 'center', padding: '64px 16px' }}>
-      <form className="card" style={{ maxWidth: 420, width: '100%' }} onSubmit={submit}>
-        <h1 style={{ fontSize: 20, marginBottom: 6 }}>Accept your Dostelo staff invite</h1>
-        {!token ? (
-          <p className="note">
-            This link is missing its invite token. Ask the staff manager who invited you to send a
-            fresh invite link.
-          </p>
-        ) : done ? (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+        background:
+          'radial-gradient(900px 480px at 85% -10%, rgba(244, 242, 237,0.08) 0%, rgba(244, 242, 237,0) 60%), linear-gradient(160deg, #141310 0%, #1C1B17 55%, #26231D 100%)',
+      }}
+    >
+      <div className="card" style={{ width: '100%', maxWidth: 430, padding: 30 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+          <span className="sidebar-logo-mark">D</span>
+          <div>
+            <div style={{ fontWeight: 800, letterSpacing: '0.08em', color: 'var(--ink)' }}>
+              DOSTELO
+            </div>
+            <div className="muted" style={{ fontSize: 12.5 }}>
+              Admin Portal invitation
+            </div>
+          </div>
+        </div>
+        {done ? (
           <>
-            <p className="note">Your staff account is active. You can sign in now.</p>
-            <button type="button" className="btn" onClick={() => router.replace('/login')}>
+            <h1 style={{ fontSize: 21, margin: '14px 0 8px' }}>
+              Your account is active
+            </h1>
+            <p className="muted" style={{ lineHeight: 1.6 }}>
+              Your password is set and this invite link cannot be
+              used again. Sign in with your email and the password
+              you just chose.
+            </p>
+            <Link className="btn" href="/login" style={{ display: 'inline-block', marginTop: 14, textDecoration: 'none' }}>
               Go to sign in
-            </button>
+            </Link>
           </>
         ) : (
           <>
-            <p className="note">Set your name and a password to activate the account.</p>
-            <ActionError error={error} />
-            <Field label="Your name">
-              <TextInput required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-            </Field>
-            <Field label="Password" hint="(at least the length the API requires)">
-              <TextInput type="password" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
-            </Field>
-            <Field label="Confirm password">
-              <TextInput type="password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
-            </Field>
-            <button type="submit" className="btn" style={{ width: '100%', justifyContent: 'center' }} disabled={busy}>
-              {busy ? 'Activating...' : 'Activate account'}
-            </button>
+            <h1 style={{ fontSize: 21, margin: '14px 0 8px' }}>
+              Set your password
+            </h1>
+            <p className="muted" style={{ lineHeight: 1.6 }}>
+              You were invited to the Dostelo admin portal. Choose a
+              password to activate your account. This link works
+              once and expires 72 hours after it was created.
+            </p>
+            <form onSubmit={handleSubmit} style={{ marginTop: 16, display: 'grid', gap: 12 }}>
+              <label className="field">
+                New password
+                <input
+                  className="input"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+              <label className="field">
+                Confirm password
+                <input
+                  className="input"
+                  type="password"
+                  value={confirm}
+                  onChange={(event) => setConfirm(event.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+              {error ? (
+                <p className="form-error" role="alert">
+                  {error}
+                </p>
+              ) : null}
+              <button type="submit" className="btn" disabled={busy}>
+                <KeyRound size={15} style={{ verticalAlign: -2, marginRight: 6 }} />
+                {busy ? 'Activating...' : 'Set password and activate'}
+              </button>
+            </form>
           </>
         )}
-      </form>
-    </main>
+      </div>
+    </div>
   );
 }
 
 export default function AcceptInvitePage() {
   return (
-    <Suspense fallback={<p className="note" style={{ padding: 40 }}>Loading...</p>}>
+    <Suspense fallback={null}>
       <AcceptInviteForm />
     </Suspense>
   );

@@ -1,17 +1,102 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
-import { Search, X, type LucideIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { UiError } from '../lib/api';
-import { formatDateTime, moneyOf } from '../lib/api';
-import { asRec, str, type Rec } from '../lib/types';
 
-/* Shared building blocks for the admin pages, fresh rebuild
-   2026-11-28. One vocabulary across every module: module header,
-   stat cards, status badges, data tables with search and paging,
-   form fields, modals, timelines and honest state notes. Styled by
-   the component classes in globals.css, which carry the Dostelo
-   storefront colour system. */
+/** Small shared building blocks for the admin pages, styled with
+ * Tailwind utility classes whose values resolve to the Dostelo
+ * design tokens through the theme mapping in
+ * tailwind.config.ts (see the Tailwind notes in this app's
+ * README). The utility values below reproduce, value for value,
+ * the hand-written classes these components used before:
+ * page-head, note, muted, error-note, card, stat-card, badge and
+ * the btn plus btn-small pair. The btn pair keeps its
+ * font: inherit declaration through the arbitrary property
+ * utility, because no font-family utility expresses inherit. */
+
+export function PageHeader({
+  title,
+  children,
+}: {
+  title: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center flex-wrap gap-3 justify-between mb-5">
+      <h1>{title}</h1>
+      {children}
+    </div>
+  );
+}
+
+export function LoadingNote({ label = 'Loading...' }: { label?: string }) {
+  return <p className="leading-[1.6] my-3 text-muted">{label}</p>;
+}
+
+export function EmptyNote({ children }: { children: ReactNode }) {
+  return <p className="leading-[1.6] my-3 text-muted">{children}</p>;
+}
+
+export function ErrorNote({
+  error,
+  onRetry,
+}: {
+  error: UiError;
+  onRetry?: () => void;
+}) {
+  return (
+    <div
+      className="leading-[1.6] my-3 flex items-center gap-3 justify-between bg-surface border border-solid border-line rounded-sm text-ink px-4 py-3"
+      role="alert"
+    >
+      <span>{error.message}</span>
+      {onRetry && error.kind !== 'forbidden' ? (
+        <button
+          type="button"
+          className="bg-dark border border-solid border-dark rounded-sm text-on-dark cursor-pointer [font:inherit] px-3 py-[6px] text-[13px]"
+          onClick={onRetry}
+        >
+          Retry
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export function StatCard({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+}) {
+  return (
+    <div className="bg-surface border border-solid border-line rounded-md p-5">
+      <div className="text-muted text-[13px]">{label}</div>
+      <div className="text-ink text-[28px] font-bold mt-[6px]">{value}</div>
+      {note ? <div className="text-muted text-[13px] mt-[6px]">{note}</div> : null}
+    </div>
+  );
+}
+
+export function Badge({ children }: { children: ReactNode }) {
+  return (
+    <span className="bg-chip rounded-[999px] text-ink inline-block text-[12px] px-[10px] py-[2px] whitespace-nowrap">
+      {children}
+    </span>
+  );
+}
+
+/* Redesign components (2026-11-25): the shared building blocks of
+ * the premium portal look, styled by the component classes in
+ * globals.css (module-head, kpi-card, band-chip, status-tabs,
+ * pager, switch, drawer, modal). Pages compose these so every
+ * module shares one card, table, filter and badge language. */
+
+import type { LucideIcon } from 'lucide-react';
+import { X } from 'lucide-react';
 
 export function ModuleHeader({
   icon: Icon,
@@ -28,301 +113,266 @@ export function ModuleHeader({
     <div className="module-head">
       <div className="module-head-main">
         <span className="module-icon">
-          <Icon size={21} strokeWidth={1.9} />
+          <Icon size={23} strokeWidth={1.9} />
         </span>
         <div>
           <h1>{title}</h1>
           {description ? <p className="module-desc">{description}</p> : null}
         </div>
       </div>
-      {children ? <div className="btn-row">{children}</div> : null}
+      {children ? <div className="module-head-actions">{children}</div> : null}
     </div>
   );
 }
 
-export function PageHeader({ title, children }: { title: string; children?: ReactNode }) {
-  return (
-    <div className="module-head">
-      <h1>{title}</h1>
-      {children ? <div className="btn-row">{children}</div> : null}
-    </div>
-  );
-}
-
-export function LoadingNote({ label = 'Loading...' }: { label?: string }) {
-  return <p className="note" role="status">{label}</p>;
-}
-
-export function EmptyNote({ children }: { children: ReactNode }) {
-  return <p className="note">{children}</p>;
-}
-
-export function ErrorNote({ error, onRetry }: { error: UiError; onRetry?: () => void }) {
-  return (
-    <div className="error-note" role="alert">
-      <span>{error.message}</span>
-      {onRetry && error.kind !== 'forbidden' ? (
-        <button type="button" className="btn small" onClick={onRetry}>Retry</button>
-      ) : null}
-    </div>
-  );
-}
-
-export function ActionError({ error }: { error: UiError | null }) {
-  if (!error) return null;
-  return (
-    <div className="error-note" role="alert">
-      <span>{error.message}</span>
-    </div>
-  );
-}
-
-/** Honest placeholder for a capability the running API does not
- * provide yet. Names the missing contract instead of faking data. */
-export function Unavailable({ title, children }: { title: string; children?: ReactNode }) {
-  return (
-    <div className="unavailable-note">
-      <strong>{title}</strong>
-      <div>{children}</div>
-    </div>
-  );
-}
-
-export function StatCard({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <div className="stat-card">
-      <div className="stat-label">{label}</div>
-      <div className="stat-value">{value}</div>
-      {note ? <div className="stat-note">{note}</div> : null}
-    </div>
-  );
-}
-
-export function StatGrid({ children }: { children: ReactNode }) {
-  return <div className="stat-grid">{children}</div>;
-}
-
-export function Card({
-  title,
-  children,
-  actions,
-}: {
-  title?: string;
-  children: ReactNode;
-  actions?: ReactNode;
-}) {
-  return (
-    <section className="card">
-      {title ? (
-        <div className="card-head">
-          <h2>{title}</h2>
-          {actions}
-        </div>
-      ) : null}
-      {children}
-    </section>
-  );
-}
-
-export function Badge({
-  children,
-  tone,
-}: {
-  children: ReactNode;
-  tone?: 'ok' | 'warn' | 'bad' | 'dark';
-}) {
-  return <span className={tone ? `badge ${tone}` : 'badge'}>{children}</span>;
-}
-
-/** Status tone from the status word itself, so every module colours
- * the same states the same way. */
-export function statusTone(status: string): 'ok' | 'warn' | 'bad' | 'dark' | undefined {
-  const s = status.toLowerCase();
-  if (['paid', 'delivered', 'completed', 'complete', 'approved', 'active', 'sent', 'delivered', 'published', 'resolved', 'closed', 'verified', 'succeeded', 'success'].includes(s)) return 'ok';
-  if (['pending', 'processing', 'in-transit', 'in_transit', 'scheduled', 'draft', 'open', 'awaiting', 'partially-paid'].includes(s)) return 'warn';
-  if (['failed', 'cancelled', 'canceled', 'rejected', 'refunded', 'not-configured', 'overdue', 'breached'].includes(s)) return 'bad';
-  return undefined;
-}
-
-export function StatusBadge({ status }: { status: unknown }) {
-  const text = str(status);
-  if (!text) return <span className="note">Not set</span>;
-  return <Badge tone={statusTone(text)}>{text.replace(/_/g, ' ')}</Badge>;
-}
-
-/* Table */
-
-export interface Column {
-  key: string;
-  label: string;
-  /** Render override. Receives the whole row. */
-  render?: (row: Rec) => ReactNode;
-  money?: boolean;
-  date?: boolean;
-}
-
-export function cellText(row: Rec, key: string): string {
-  const value = row[key];
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'object') {
-    const rec = asRec(value);
-    return str(rec.name ?? rec.title ?? rec.label ?? rec.id ?? '');
-  }
-  return String(value);
-}
-
-export function DataTable({
-  columns,
-  rows,
-  emptyText = 'No records found.',
-  pageSize = 25,
-  searchable = true,
-}: {
-  columns: Column[];
-  rows: Rec[];
-  emptyText?: string;
-  pageSize?: number;
-  searchable?: boolean;
-}) {
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(0);
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) =>
-      columns.some((col) => cellText(row, col.key).toLowerCase().includes(q)),
-    );
-  }, [rows, query, columns]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const safePage = Math.min(page, pageCount - 1);
-  const visible = filtered.slice(safePage * pageSize, safePage * pageSize + pageSize);
-
-  return (
-    <div>
-      {searchable ? (
-        <div className="toolbar">
-          <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-            <Search size={15} style={{ position: 'absolute', left: 9, color: 'var(--muted)' }} />
-            <input
-              className="input search-input"
-              style={{ paddingLeft: 30 }}
-              placeholder="Search this table"
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setPage(0);
-              }}
-              aria-label="Search this table"
-            />
-          </span>
-          <span className="note">{filtered.length} record{filtered.length === 1 ? '' : 's'}</span>
-        </div>
-      ) : null}
-      {visible.length === 0 ? (
-        <EmptyNote>{emptyText}</EmptyNote>
-      ) : (
-        <div className="table-wrap">
-          <table className="data">
-            <thead>
-              <tr>
-                {columns.map((col) => (
-                  <th key={col.key}>{col.label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((row, index) => (
-                <tr key={str(row.id ?? row.orderNumber ?? row.paymentId ?? row.sessionId ?? index)}>
-                  {columns.map((col) => (
-                    <td key={col.key}>
-                      {col.render
-                        ? col.render(row)
-                        : col.money
-                          ? moneyOf(row[col.key]) || cellText(row, col.key)
-                          : col.date
-                            ? formatDateTime(row[col.key])
-                            : cellText(row, col.key)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {pageCount > 1 ? (
-        <div className="pager">
-          <button type="button" className="btn secondary small" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
-            Previous
-          </button>
-          <span className="note">Page {safePage + 1} of {pageCount}</span>
-          <button type="button" className="btn secondary small" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>
-            Next
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/* Forms */
-
-export function Field({
+export function KpiCard({
+  icon: Icon,
   label,
-  hint,
-  children,
+  value,
+  note,
+  delta,
+  tone = 'purple',
 }: {
+  icon: LucideIcon;
   label: string;
-  hint?: string;
-  children: ReactNode;
+  value: string;
+  note?: string;
+  delta?: { text: string; direction: 'up' | 'down' } | null;
+  tone?: 'purple' | 'green' | 'blue' | 'orange';
 }) {
   return (
-    <div className="field">
-      <label>
-        {label}
-        {hint ? <span className="hint"> {hint}</span> : null}
-      </label>
-      {children}
+    <div className={`kpi-card kpi-${tone}`}>
+      <div className="kpi-top">
+        <span className="kpi-icon">
+          <Icon size={21} strokeWidth={2} />
+        </span>
+        <span className="kpi-label">{label}</span>
+      </div>
+      <div className="kpi-value">{value}</div>
+      <div className="kpi-note">
+        {delta ? (
+          <span
+            className={`kpi-delta ${delta.direction === 'down' ? 'down' : 'up'}`}
+          >
+            {delta.direction === 'down' ? '▼' : '▲'} {delta.text}
+          </span>
+        ) : null}
+        {note ? <span>{note}</span> : null}
+      </div>
     </div>
   );
 }
 
-export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className="input" />;
+export function DeltaChip({
+  current,
+  previous,
+  suffix = '',
+}: {
+  current: number;
+  previous: number;
+  suffix?: string;
+}) {
+  if (previous === 0) return null;
+  const change = ((current - previous) / previous) * 100;
+  const down = change < 0;
+  return (
+    <span className={`delta-chip${down ? ' down' : ''}`}>
+      {down ? '▼' : '▲'} {Math.abs(change).toFixed(1)}%{suffix}
+    </span>
+  );
 }
 
-export function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className="textarea" />;
+export function BandChip({
+  band,
+}: {
+  band: 'hot' | 'warm' | 'cold' | 'green' | 'grey' | 'purple';
+}) {
+  const labels: Record<string, string> = {
+    hot: 'Hot',
+    warm: 'Warm',
+    cold: 'Cold',
+    green: 'Yes',
+    grey: 'No',
+    purple: 'Info',
+  };
+  return <span className={`band-chip ${band}`}>{labels[band] ?? band}</span>;
 }
 
-export function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className="select" />;
+export function ScoreBand({ score }: { score: number | null }) {
+  if (score === null || score === undefined) {
+    return <span className="muted">Not scored</span>;
+  }
+  const band = score >= 70 ? 'hot' : score >= 40 ? 'warm' : 'cold';
+  return (
+    <span style={{ display: 'inline-flex', gap: 7, alignItems: 'center' }}>
+      <strong className="num">{score}</strong>
+      <BandChip band={band} />
+    </span>
+  );
+}
+
+export function StatusTabs({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: { key: string; label: string; count?: number }[];
+  active: string;
+  onChange: (key: string) => void;
+}) {
+  return (
+    <div className="status-tabs" role="tablist">
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          role="tab"
+          aria-selected={active === tab.key}
+          className={`status-tab${active === tab.key ? ' active' : ''}`}
+          onClick={() => onChange(tab.key)}
+        >
+          {tab.label}
+          {tab.count !== undefined ? (
+            <span className="tab-count">{tab.count}</span>
+          ) : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function Pagination({
+  page,
+  pageCount,
+  onChange,
+}: {
+  page: number;
+  pageCount: number;
+  onChange: (page: number) => void;
+}) {
+  if (pageCount <= 1) return null;
+  const pages: number[] = [];
+  for (let i = 1; i <= pageCount; i += 1) {
+    if (i === 1 || i === pageCount || Math.abs(i - page) <= 1) pages.push(i);
+  }
+  const shown = [...new Set(pages)];
+  return (
+    <div className="pager">
+      <button
+        type="button"
+        disabled={page <= 1}
+        onClick={() => onChange(page - 1)}
+        aria-label="Previous page"
+      >
+        ‹
+      </button>
+      {shown.map((value, index) => (
+        <span key={value} style={{ display: 'inline-flex', gap: 6 }}>
+          {index > 0 && shown[index - 1] !== value - 1 ? (
+            <span className="muted">…</span>
+          ) : null}
+          <button
+            type="button"
+            className={value === page ? 'active' : ''}
+            onClick={() => onChange(value)}
+          >
+            {value}
+          </button>
+        </span>
+      ))}
+      <button
+        type="button"
+        disabled={page >= pageCount}
+        onClick={() => onChange(page + 1)}
+        aria-label="Next page"
+      >
+        ›
+      </button>
+    </div>
+  );
+}
+
+export function Switch({
+  checked,
+  onChange,
+  disabled,
+  label,
+}: {
+  checked: boolean;
+  onChange?: (value: boolean) => void;
+  disabled?: boolean;
+  label?: string;
+}) {
+  return (
+    <label className="switch">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        aria-label={label}
+        onChange={(event) => onChange?.(event.target.checked)}
+      />
+      <span className="switch-track" />
+    </label>
+  );
+}
+
+export function Drawer({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <div className="drawer-backdrop" onClick={onClose} />
+      <aside className="drawer" role="dialog" aria-label={title}>
+        <div className="drawer-head">
+          <h2 style={{ margin: 0, fontSize: 19 }}>{title}</h2>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onClose}
+            aria-label="Close panel"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        {children}
+      </aside>
+    </>
+  );
 }
 
 export function Modal({
   title,
   onClose,
   children,
-  wide,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
-  wide?: boolean;
 }) {
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div className="modal-backdrop" onClick={onClose}>
       <div
-        className={wide ? 'modal wide' : 'modal'}
+        className="modal-card"
         role="dialog"
-        aria-modal="true"
         aria-label={title}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="modal-head">
-          <h2>{title}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
-            <X size={16} />
+        <div className="drawer-head">
+          <h2 style={{ margin: 0, fontSize: 19 }}>{title}</h2>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onClose}
+            aria-label="Close dialog"
+          >
+            <X size={18} />
           </button>
         </div>
         {children}
@@ -331,92 +381,51 @@ export function Modal({
   );
 }
 
-export function StatusTabs({
-  options,
-  value,
-  onChange,
+export function CardHead({
+  icon: Icon,
+  title,
+  children,
 }: {
-  options: Array<{ value: string; label: string }>;
-  value: string;
-  onChange: (value: string) => void;
+  icon?: LucideIcon;
+  title: string;
+  children?: ReactNode;
 }) {
   return (
-    <div className="status-tabs" role="tablist">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          role="tab"
-          aria-selected={value === option.value}
-          className={value === option.value ? 'status-tab active' : 'status-tab'}
-          onClick={() => onChange(option.value)}
-        >
-          {option.label}
-        </button>
-      ))}
+    <div className="card-head">
+      <span className="card-title">
+        {Icon ? (
+          <span className="card-title-icon">
+            <Icon size={17} strokeWidth={2} />
+          </span>
+        ) : null}
+        {title}
+      </span>
+      {children}
     </div>
   );
 }
 
-export function Timeline({ items }: { items: Rec[] }) {
-  if (items.length === 0) return <EmptyNote>No history recorded yet.</EmptyNote>;
-  return (
-    <ul className="timeline">
-      {items.map((item, index) => (
-        <li key={str(item.id ?? index)}>
-          <div>
-            <div style={{ color: 'var(--ink)', fontWeight: 600 }}>
-              {str(item.status ?? item.type ?? item.action ?? item.event ?? 'Event')}
-            </div>
-            <div className="note">
-              {str(item.note ?? item.message ?? item.result ?? '')}
-              {item.createdAt || item.occurredAt ? ` ${formatDateTime(item.createdAt ?? item.occurredAt)}` : ''}
-              {item.actorId ? ` by ${str(item.actorId)}` : ''}
-            </div>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
+/** Percentage change between two periods, or null when the
+ * previous period has no data (the portal omits deltas it cannot
+ * compute rather than inventing them). */
+export function deltaFor(
+  current: number,
+  previous: number,
+): { text: string; direction: 'up' | 'down' } | null {
+  if (previous === 0) return null;
+  const change = ((current - previous) / previous) * 100;
+  return {
+    text: `${Math.abs(change).toFixed(1)}% vs previous period`,
+    direction: change < 0 ? 'down' : 'up',
+  };
 }
 
-export function KeyValues({ entries }: { entries: Array<[string, ReactNode]> }) {
-  return (
-    <dl className="kv">
-      {entries.map(([key, value]) => (
-        <div key={key}>
-          <dt>{key}</dt>
-          <dd>{value === '' || value === null || value === undefined ? 'Not set' : value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
+/** Client-side pagination helper for list pages. */
+export function paginate<T>(items: T[], page: number, pageSize: number): T[] {
+  const start = (page - 1) * pageSize;
+  return items.slice(start, start + pageSize);
 }
 
-/** Horizontal bar list for report breakdowns, scaled to the
- * largest real value in the set. Values come from the caller. */
-export function BarList({
-  rows,
-  format,
-}: {
-  rows: Array<{ label: string; value: number }>;
-  format?: (value: number) => string;
-}) {
-  const max = Math.max(1, ...rows.map((row) => row.value));
-  if (rows.length === 0) return <EmptyNote>No data for this period.</EmptyNote>;
-  return (
-    <div>
-      {rows.map((row) => (
-        <div className="bar-row" key={row.label}>
-          <span>{row.label}</span>
-          <span className="bar-track">
-            <span className="bar-fill" style={{ display: 'block', width: `${Math.round((row.value / max) * 100)}%` }} />
-          </span>
-          <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-            {format ? format(row.value) : row.value.toLocaleString('en-US')}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
+export function pageCountFor(total: number, pageSize: number): number {
+  return Math.max(1, Math.ceil(total / pageSize));
 }
